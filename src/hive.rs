@@ -11,7 +11,7 @@ use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::sync::{Mutex, RwLock, LockResult, MutexGuard};
 
 use task::{TaskGenerator, Task};
-use candidate::Candidate;
+use candidate::{WorkingCandidate, Candidate};
 use solution::Solution;
 use scaling::{ScalingFunction, proportionate};
 use result;
@@ -29,7 +29,7 @@ pub struct Hive<S: Solution> {
     observers: usize,
     retries: usize,
 
-    candidates: Vec<RwLock<Candidate<S>>>,
+    working: Vec<RwLock<WorkingCandidate<S>>>,
     best: Mutex<Candidate<S>>,
     tasks: Mutex<Option<TaskGenerator>>,
 
@@ -39,9 +39,9 @@ pub struct Hive<S: Solution> {
 
 impl<S: Solution + Debug> Debug for Hive<S> {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        for mutex in (&self.candidates).iter() {
-            let candidate = mutex.read().unwrap();
-            try!(write!(f, "..{:?}..\n", *candidate));
+        for mutex in (&self.working).iter() {
+            let working = mutex.read().unwrap();
+            try!(write!(f, "..{:?}..\n", working.candidate));
         }
         let best_candidate = self.get().unwrap();
         write!(f, ">>{:?}<<", *best_candidate)
@@ -54,26 +54,26 @@ impl<S: Solution> Hive<S> {
             panic!("Hive must have at least one worker.");
         }
 
-        let mut raw_candidates = (0..workers)
-            .map(|_| Candidate::new(S::make(), retries))
+        let mut candidates = (0..workers)
+            .map(|_| Candidate::new(S::make()))
             .collect::<Vec<_>>();
 
         let best = {
-            let best_candidate = raw_candidates.iter()
+            let best_candidate = candidates.iter()
                 .fold1(|best, next| if next.fitness > best.fitness { next } else { best })
                 .unwrap();
             Mutex::new(best_candidate.clone())
         };
 
-        let candidates = raw_candidates.drain(..)
-            .map(RwLock::new).collect::<Vec<_>>();
+        let working = candidates.drain(..)
+            .map(|c| RwLock::new(WorkingCandidate::new(c, retries))).collect::<Vec<_>>();
 
         Hive {
             workers: workers,
             observers: observers,
             retries: retries,
 
-            candidates: candidates,
+            working: working,
             best: best,
             tasks: Mutex::new(None),
 
@@ -92,11 +92,11 @@ impl<S: Solution> Hive<S> {
         self
     }
 
-    fn current_candidates(&self) -> Vec<Candidate<S>> {
-        self.candidates.iter()
+    fn current_working(&self) -> Vec<Candidate<S>> {
+        self.working.iter()
             .map(|candidate_mutex| {
                 let read_guard = force_guard(candidate_mutex.read());
-                read_guard.clone()
+                read_guard.candidate.clone()
             })
             .collect()
     }
@@ -108,27 +108,26 @@ impl<S: Solution> Hive<S> {
         }
     }
 
-    fn work_on(&self, current_candidates: &[Candidate<S>], n: usize) {
-        let variant_solution = S::explore(current_candidates, n);
-        let variant = Candidate::new(variant_solution, self.retries);
+    fn work_on(&self, current_working: &[Candidate<S>], n: usize) {
+        let variant = Candidate::new(S::explore(current_working, n));
 
-        let mut write_guard = force_guard(self.candidates[n].write());
-        if variant.fitness > write_guard.fitness {
-            *write_guard = variant;
-            self.consider_improvement(&write_guard);
+        let mut write_guard = force_guard(self.working[n].write());
+        if variant.fitness > write_guard.candidate.fitness {
+            *write_guard = WorkingCandidate::new(variant, self.retries);
+            self.consider_improvement(&write_guard.candidate);
         } else {
             write_guard.deplete();
             // Scouting has been folded into the working process
             if write_guard.expired() {
-                let solution = S::make();
-                *write_guard = Candidate::new(solution, self.retries);
-                self.consider_improvement(&write_guard);
+                let candidate = Candidate::new(S::make());
+                *write_guard = WorkingCandidate::new(candidate, self.retries);
+                self.consider_improvement(&write_guard.candidate);
             }
         }
     }
 
-    fn choose(&self, current_candidates: &[Candidate<S>], rng: &mut Rng) -> usize {
-        let fitnesses = (self.scale)(current_candidates.iter()
+    fn choose(&self, current_working: &[Candidate<S>], rng: &mut Rng) -> usize {
+        let fitnesses = (self.scale)(current_working.iter()
             .map(|candidate| candidate.fitness)
             .collect::<Vec<f64>>());
 
@@ -151,12 +150,12 @@ impl<S: Solution> Hive<S> {
     }
 
     fn execute(&self, task: &Task, rng: &mut Rng) {
-        let current_candidates = self.current_candidates();
+        let current_working = self.current_working();
         let index = match *task {
             Task::Worker(n) => n,
-            Task::Observer(_) => self.choose(&current_candidates, rng),
+            Task::Observer(_) => self.choose(&current_working, rng),
         };
-        self.work_on(&current_candidates, index);
+        self.work_on(&current_working, index);
     }
 
     fn run(&self, tasks: TaskGenerator) -> result::Result<()> {
