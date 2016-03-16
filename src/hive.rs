@@ -14,8 +14,7 @@ use task::{TaskGenerator, Task};
 use candidate::{WorkingCandidate, Candidate};
 use solution::Solution;
 use scaling::{ScalingFunction, proportionate};
-use result;
-
+use result::{Result as AbcResult, Error as AbcError};
 pub struct Hive<S: Solution> {
     workers: usize,
     observers: usize,
@@ -84,7 +83,7 @@ impl<S: Solution> Hive<S> {
         self
     }
 
-    fn current_working(&self) -> result::Result<Vec<Candidate<S>>> {
+    fn current_working(&self) -> AbcResult<Vec<Candidate<S>>> {
         let mut current_working = Vec::with_capacity(self.working.len());
         for candidate_mutex in &self.working {
             let read_guard = try!(candidate_mutex.read());
@@ -93,7 +92,7 @@ impl<S: Solution> Hive<S> {
         Ok(current_working)
     }
 
-    fn consider_improvement(&self, candidate: &Candidate<S>) -> result::Result<()> {
+    fn consider_improvement(&self, candidate: &Candidate<S>) -> AbcResult<()> {
         let mut best_guard = try!(self.best.lock());
         if candidate.fitness > best_guard.fitness {
             *best_guard = candidate.clone();
@@ -101,7 +100,7 @@ impl<S: Solution> Hive<S> {
         Ok(())
     }
 
-    fn work_on(&self, current_working: &[Candidate<S>], n: usize) -> result::Result<()> {
+    fn work_on(&self, current_working: &[Candidate<S>], n: usize) -> AbcResult<()> {
         let variant = Candidate::new(S::explore(current_working, n));
 
         let mut write_guard = try!(self.working[n].write());
@@ -143,7 +142,7 @@ impl<S: Solution> Hive<S> {
         unreachable!();
     }
 
-    fn execute(&self, task: &Task, rng: &mut Rng) -> result::Result<()> {
+    fn execute(&self, task: &Task, rng: &mut Rng) -> AbcResult<()> {
         let current_working = try!(self.current_working());
         let index = match *task {
             Task::Worker(n) => n,
@@ -152,13 +151,17 @@ impl<S: Solution> Hive<S> {
         self.work_on(&current_working, index)
     }
 
-    fn run(&self, tasks: TaskGenerator) -> result::Result<()> {
+    fn run(&self, tasks: TaskGenerator) -> AbcResult<()> {
         let mut guard = try!(self.tasks.lock());
         *guard = Some(tasks);
         drop(guard);
 
         scope(|scope| {
-            let mut handles: Vec<ScopedJoinHandle<result::Result<()>>> = Vec::new();
+
+            // We need to use a mut and a for loop in order to make the
+            // lifetimes work out for the scoped threads.
+            let mut handles: Vec<ScopedJoinHandle<AbcResult<()>>> =
+                Vec::with_capacity(self.threads);
 
             for _ in 0..self.threads {
                 handles.push(scope.spawn(|| {
@@ -185,7 +188,7 @@ impl<S: Solution> Hive<S> {
         })
     }
 
-    pub fn run_for_rounds(&self, rounds: usize) -> result::Result<Candidate<S>> {
+    pub fn run_for_rounds(&self, rounds: usize) -> AbcResult<Candidate<S>> {
         let tasks = TaskGenerator::new(self.workers, self.observers).max_rounds(rounds);
         try!(self.run(tasks));
         let guard = try!(self.get());
@@ -216,19 +219,19 @@ impl<S: Solution> Hive<S> {
     /// };
     /// # }
     /// ```
-    pub fn get(&self) -> result::Result<MutexGuard<Candidate<S>>> {
-        self.best.lock().map_err(result::Error::from)
+    pub fn get(&self) -> AbcResult<MutexGuard<Candidate<S>>> {
+        self.best.lock().map_err(AbcError::from)
     }
 
-    pub fn stop(&self) -> result::Result<()> {
+    pub fn stop(&self) -> AbcResult<()> {
         self.tasks.lock()
-            .map_err(result::Error::from)
+            .map_err(AbcError::from)
             .map(|mut guard| guard.as_mut().map_or((), |t| t.stop()))
     }
 
-    pub fn get_round(&self) -> result::Result<Option<usize>> {
+    pub fn get_round(&self) -> AbcResult<Option<usize>> {
         self.tasks.lock()
-            .map_err(result::Error::from)
+            .map_err(AbcError::from)
             .map(|guard| guard.as_ref().map(|tasks| tasks.round))
     }
 }
