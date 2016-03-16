@@ -15,6 +15,7 @@ use candidate::{WorkingCandidate, Candidate};
 use solution::Solution;
 use scaling::{ScalingFunction, proportionate};
 use result::{Result as AbcResult, Error as AbcError};
+
 pub struct Hive<S: Solution> {
     workers: usize,
     observers: usize,
@@ -57,7 +58,8 @@ impl<S: Solution> Hive<S> {
         };
 
         let working = candidates.drain(..)
-            .map(|c| RwLock::new(WorkingCandidate::new(c, retries))).collect::<Vec<_>>();
+            .map(|c| RwLock::new(WorkingCandidate::new(c, retries)))
+            .collect::<Vec<_>>();
 
         Hive {
             workers: workers,
@@ -156,13 +158,9 @@ impl<S: Solution> Hive<S> {
         *guard = Some(tasks);
         drop(guard);
 
+        let mut handles: Vec<ScopedJoinHandle<AbcResult<()>>> = Vec::with_capacity(self.threads);
+
         scope(|scope| {
-
-            // We need to use a mut and a for loop in order to make the
-            // lifetimes work out for the scoped threads.
-            let mut handles: Vec<ScopedJoinHandle<AbcResult<()>>> =
-                Vec::with_capacity(self.threads);
-
             for _ in 0..self.threads {
                 handles.push(scope.spawn(|| {
                     let mut rng = rand::thread_rng();
@@ -173,26 +171,21 @@ impl<S: Solution> Hive<S> {
 
                         match task {
                             Some(t) => try!(self.execute(&t, &mut rng)),
-                            None => break
+                            None => return Ok(())
                         };
                     }
-                    Ok(())
                 }));
             }
 
-            for handle in handles {
-                try!(handle.join());
-            }
-
-            Ok(())
+            // Return Ok(()) only if all threads join cleanly.
+            handles.drain(..).fold(Ok(()), |result, handle| result.and(handle.join()))
         })
     }
 
     pub fn run_for_rounds(&self, rounds: usize) -> AbcResult<Candidate<S>> {
         let tasks = TaskGenerator::new(self.workers, self.observers).max_rounds(rounds);
         try!(self.run(tasks));
-        let guard = try!(self.get());
-        Ok(guard.clone())
+        self.get().map(|guard| guard.clone())
     }
 
     /// Get a guard for the current best solution found by the hive.
@@ -224,15 +217,13 @@ impl<S: Solution> Hive<S> {
     }
 
     pub fn stop(&self) -> AbcResult<()> {
-        self.tasks.lock()
-            .map_err(AbcError::from)
-            .map(|mut guard| guard.as_mut().map_or((), |t| t.stop()))
+        let mut tasks_guard = try!(self.tasks.lock());
+        Ok(tasks_guard.as_mut().map_or((), |t| t.stop()))
     }
 
     pub fn get_round(&self) -> AbcResult<Option<usize>> {
-        self.tasks.lock()
-            .map_err(AbcError::from)
-            .map(|guard| guard.as_ref().map(|tasks| tasks.round))
+        let tasks_guard = try!(self.tasks.lock());
+        Ok(tasks_guard.as_ref().map(|tasks| tasks.round))
     }
 }
 
