@@ -1,5 +1,5 @@
 use std::result;
-use std::sync::{PoisonError, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::PoisonError;
 use std::fmt;
 use std::error;
 
@@ -35,7 +35,7 @@ impl fmt::Display for Error {
 // of the PoisonError. Since they all amount to the same thing for our purposes,
 // we abstract over them with T.
 impl<T> From<PoisonError<T>> for Error {
-    fn from(err: PoisonError<T>) -> Error {
+    fn from(_: PoisonError<T>) -> Error {
         Error
     }
 }

@@ -95,16 +95,16 @@ impl<S: Solution> Hive<S> {
     fn current_candidates(&self) -> Vec<Candidate<S>> {
         self.candidates.iter()
             .map(|candidate_mutex| {
-                let read_lock = force_guard(candidate_mutex.read());
-                read_lock.clone()
+                let read_guard = force_guard(candidate_mutex.read());
+                read_guard.clone()
             })
             .collect()
     }
 
     fn consider_improvement(&self, candidate: &Candidate<S>) {
-        let mut best_lock = force_guard(self.best.lock());
-        if candidate.fitness > best_lock.fitness {
-            *best_lock = candidate.clone();
+        let mut best_guard = force_guard(self.best.lock());
+        if candidate.fitness > best_guard.fitness {
+            *best_guard = candidate.clone();
         }
     }
 
@@ -112,17 +112,17 @@ impl<S: Solution> Hive<S> {
         let variant_solution = S::explore(current_candidates, n);
         let variant = Candidate::new(variant_solution, self.retries);
 
-        let mut write_lock = force_guard(self.candidates[n].write());
-        if variant.fitness > write_lock.fitness {
-            *write_lock = variant;
-            self.consider_improvement(&write_lock);
+        let mut write_guard = force_guard(self.candidates[n].write());
+        if variant.fitness > write_guard.fitness {
+            *write_guard = variant;
+            self.consider_improvement(&write_guard);
         } else {
-            write_lock.deplete();
+            write_guard.deplete();
             // Scouting has been folded into the working process
-            if write_lock.expired() {
+            if write_guard.expired() {
                 let solution = S::make();
-                *write_lock = Candidate::new(solution, self.retries);
-                self.consider_improvement(&write_lock);
+                *write_guard = Candidate::new(solution, self.retries);
+                self.consider_improvement(&write_guard);
             }
         }
     }
@@ -160,9 +160,9 @@ impl<S: Solution> Hive<S> {
     }
 
     fn run(&self, tasks: TaskGenerator) -> result::Result<()> {
-        let mut tasks_lock = try!(self.tasks.lock());
-        *tasks_lock = Some(tasks);
-        drop(tasks_lock);
+        let mut guard = try!(self.tasks.lock());
+        *guard = Some(tasks);
+        drop(guard);
 
         scope(|scope| {
             let mut handles: Vec<ScopedJoinHandle<result::Result<()>>> = Vec::new();
@@ -171,9 +171,9 @@ impl<S: Solution> Hive<S> {
                 handles.push(scope.spawn(|| {
                     let mut rng = rand::thread_rng();
                     loop {
-                        let mut tasks_lock = try!(self.tasks.lock());
-                        let task = tasks_lock.as_mut().and_then(|gen| gen.next());
-                        drop(tasks_lock);
+                        let mut guard = try!(self.tasks.lock());
+                        let task = guard.as_mut().and_then(|gen| gen.next());
+                        drop(guard);
 
                         match task {
                             Some(t) => self.execute(&t, &mut rng),
@@ -204,7 +204,8 @@ impl<S: Solution> Hive<S> {
     /// If the hive is running, you should drop the guard returned by this
     /// function as soon as convenient, since the logic of the hive can block
     /// on the availability of the associated mutex. If you plan on performing
-    /// expensive computations, you should clone the guard inside a block:
+    /// expensive computations, you should `drop` the guard as soon as
+    /// possible, or acquire and clone it within a small block, like this:
     ///
     /// ```
     /// # extern crate abc; use abc::{Solution, Candidate, Hive};
@@ -217,8 +218,8 @@ impl<S: Solution> Hive<S> {
     /// # fn main() {
     /// let hive: Hive<X> = Hive::new(5, 5, 5);
     /// let current_best = {
-    ///     let lock = hive.get().unwrap();
-    ///     lock.clone()
+    ///     let guard = hive.get().unwrap();
+    ///     guard.clone()
     /// };
     /// # }
     /// ```
@@ -227,13 +228,15 @@ impl<S: Solution> Hive<S> {
     }
 
     pub fn stop(&self) -> result::Result<()> {
-        let mut tasks_lock = try!(self.tasks.lock());
-        Ok(tasks_lock.as_mut().map_or((), |t| t.stop()))
+        self.tasks.lock()
+            .map_err(result::Error::from)
+            .map(|mut guard| guard.as_mut().map_or((), |t| t.stop()))
     }
 
     pub fn get_round(&self) -> result::Result<Option<usize>> {
-        let tasks_lock = try!(self.tasks.lock());
-        Ok(tasks_lock.as_ref().map(|tasks| tasks.round))
+        self.tasks.lock()
+            .map_err(result::Error::from)
+            .map(|guard| guard.as_ref().map(|tasks| tasks.round))
     }
 }
 
