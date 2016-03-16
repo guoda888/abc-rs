@@ -5,16 +5,16 @@ extern crate crossbeam;
 
 use self::rand::Rng;
 use self::itertools::Itertools;
+use self::crossbeam::{scope, ScopedJoinHandle};
 
-use std::thread::spawn;
 use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::sync::{Mutex, RwLock, LockResult, MutexGuard};
-use std::sync::mpsc::{Sender, Receiver, channel};
 
 use task::{TaskGenerator, Task};
 use candidate::Candidate;
 use solution::Solution;
 use scaling::{ScalingFunction, proportionate};
+use result;
 
 // Completely ignore lock poisoning.
 fn force_guard<Guard>(result: LockResult<Guard>) -> Guard {
@@ -43,7 +43,7 @@ impl<S: Solution + Debug> Debug for Hive<S> {
             let candidate = mutex.read().unwrap();
             try!(write!(f, "..{:?}..\n", *candidate));
         }
-        let best_candidate = self.get();
+        let best_candidate = self.get().unwrap();
         write!(f, ">>{:?}<<", *best_candidate)
     }
 }
@@ -159,16 +159,19 @@ impl<S: Solution> Hive<S> {
         self.work_on(&current_candidates, index);
     }
 
-    fn run(&self, tasks: TaskGenerator) {
-        let mut tasks_lock = self.tasks.lock().unwrap();
+    fn run(&self, tasks: TaskGenerator) -> result::Result<()> {
+        let mut tasks_lock = try!(self.tasks.lock());
         *tasks_lock = Some(tasks);
         drop(tasks_lock);
-        crossbeam::scope(|scope| {
+
+        scope(|scope| {
+            let mut handles: Vec<ScopedJoinHandle<result::Result<()>>> = Vec::new();
+
             for _ in 0..self.threads {
-                scope.spawn(|| {
+                handles.push(scope.spawn(|| {
                     let mut rng = rand::thread_rng();
                     loop {
-                        let mut tasks_lock = self.tasks.lock().unwrap();
+                        let mut tasks_lock = try!(self.tasks.lock());
                         let task = tasks_lock.as_mut().and_then(|gen| gen.next());
                         drop(tasks_lock);
 
@@ -177,21 +180,23 @@ impl<S: Solution> Hive<S> {
                             None => break
                         };
                     }
-                });
+                    Ok(())
+                }));
             }
-        });
+
+            for handle in handles {
+                try!(handle.join());
+            }
+
+            Ok(())
+        })
     }
 
-    pub fn run_for_rounds(&self, rounds: usize) -> Candidate<S> {
+    pub fn run_for_rounds(&self, rounds: usize) -> result::Result<Candidate<S>> {
         let tasks = TaskGenerator::new(self.workers, self.observers).max_rounds(rounds);
-        self.run(tasks);
-        self.get().clone()
-    }
-
-    pub fn stream(&self) -> Receiver<Candidate<S>> {
-        let (tx, rx) = channel();
-        panic!("Not implemented!");
-        rx
+        try!(self.run(tasks));
+        let guard = try!(self.get());
+        Ok(guard.clone())
     }
 
     /// Get a guard for the current best solution found by the hive.
@@ -212,28 +217,28 @@ impl<S: Solution> Hive<S> {
     /// # fn main() {
     /// let hive: Hive<X> = Hive::new(5, 5, 5);
     /// let current_best = {
-    ///     let lock = hive.get();
+    ///     let lock = hive.get().unwrap();
     ///     lock.clone()
     /// };
     /// # }
     /// ```
-    pub fn get(&self) -> MutexGuard<Candidate<S>> {
-        self.best.lock().unwrap()
+    pub fn get(&self) -> result::Result<MutexGuard<Candidate<S>>> {
+        self.best.lock().map_err(result::Error::from)
     }
 
-    pub fn stop(&self) {
-        let mut tasks_lock = self.tasks.lock().unwrap();
-        tasks_lock.as_mut().map_or((), |t| t.stop())
+    pub fn stop(&self) -> result::Result<()> {
+        let mut tasks_lock = try!(self.tasks.lock());
+        Ok(tasks_lock.as_mut().map_or((), |t| t.stop()))
     }
 
-    pub fn get_round(&self) -> Option<usize> {
-        let tasks_lock = self.tasks.lock().unwrap();
-        tasks_lock.as_ref().map(|tasks| tasks.round)
+    pub fn get_round(&self) -> result::Result<Option<usize>> {
+        let tasks_lock = try!(self.tasks.lock());
+        Ok(tasks_lock.as_ref().map(|tasks| tasks.round))
     }
 }
 
 impl<S: Solution> Drop for Hive<S> {
     fn drop(&mut self) {
-        self.stop();
+        self.stop().unwrap()
     }
 }
