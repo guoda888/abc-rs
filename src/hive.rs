@@ -204,12 +204,15 @@ impl<S: Solution> Hive<S> {
     /// #     fn evaluate_fitness(&self) -> f64 { 0_f64 }
     /// #     fn explore(field: &[Candidate<X>], n: usize) -> X { X }
     /// # }
+    /// # fn do_stuff_with(x: Candidate<X>) {}
     /// # fn main() {
     /// let hive: Hive<X> = Hive::new(5, 5, 5);
     /// let current_best = {
     ///     let guard = hive.get().unwrap();
     ///     guard.clone()
     /// };
+    ///
+    /// do_stuff_with(current_best);
     /// # }
     /// ```
     pub fn get(&self) -> AbcResult<MutexGuard<Candidate<S>>> {
