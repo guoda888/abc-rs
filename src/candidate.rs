@@ -53,8 +53,4 @@ impl<S: Solution> WorkingCandidate<S> {
     pub fn deplete(&mut self) {
         self.retries -= 1;
     }
-
-    pub fn expire(&mut self) {
-        self.retries = 0;
-    }
 }

@@ -8,21 +8,13 @@ use self::itertools::Itertools;
 use self::crossbeam::{scope, ScopedJoinHandle};
 
 use std::fmt::{Debug, Formatter, Result as FmtResult};
-use std::sync::{Mutex, RwLock, LockResult, MutexGuard};
+use std::sync::{Mutex, RwLock, MutexGuard};
 
 use task::{TaskGenerator, Task};
 use candidate::{WorkingCandidate, Candidate};
 use solution::Solution;
 use scaling::{ScalingFunction, proportionate};
 use result;
-
-// Completely ignore lock poisoning.
-fn force_guard<Guard>(result: LockResult<Guard>) -> Guard {
-    match result {
-        Ok(x) => x,
-        Err(err) => err.into_inner()
-    }
-}
 
 pub struct Hive<S: Solution> {
     workers: usize,
@@ -92,38 +84,40 @@ impl<S: Solution> Hive<S> {
         self
     }
 
-    fn current_working(&self) -> Vec<Candidate<S>> {
-        self.working.iter()
-            .map(|candidate_mutex| {
-                let read_guard = force_guard(candidate_mutex.read());
-                read_guard.candidate.clone()
-            })
-            .collect()
+    fn current_working(&self) -> result::Result<Vec<Candidate<S>>> {
+        let mut current_working = Vec::with_capacity(self.working.len());
+        for candidate_mutex in &self.working {
+            let read_guard = try!(candidate_mutex.read());
+            current_working.push(read_guard.candidate.clone())
+        }
+        Ok(current_working)
     }
 
-    fn consider_improvement(&self, candidate: &Candidate<S>) {
-        let mut best_guard = force_guard(self.best.lock());
+    fn consider_improvement(&self, candidate: &Candidate<S>) -> result::Result<()> {
+        let mut best_guard = try!(self.best.lock());
         if candidate.fitness > best_guard.fitness {
             *best_guard = candidate.clone();
         }
+        Ok(())
     }
 
-    fn work_on(&self, current_working: &[Candidate<S>], n: usize) {
+    fn work_on(&self, current_working: &[Candidate<S>], n: usize) -> result::Result<()> {
         let variant = Candidate::new(S::explore(current_working, n));
 
-        let mut write_guard = force_guard(self.working[n].write());
+        let mut write_guard = try!(self.working[n].write());
         if variant.fitness > write_guard.candidate.fitness {
             *write_guard = WorkingCandidate::new(variant, self.retries);
-            self.consider_improvement(&write_guard.candidate);
+            try!(self.consider_improvement(&write_guard.candidate));
         } else {
             write_guard.deplete();
             // Scouting has been folded into the working process
             if write_guard.expired() {
                 let candidate = Candidate::new(S::make());
                 *write_guard = WorkingCandidate::new(candidate, self.retries);
-                self.consider_improvement(&write_guard.candidate);
+                try!(self.consider_improvement(&write_guard.candidate));
             }
         }
+        Ok(())
     }
 
     fn choose(&self, current_working: &[Candidate<S>], rng: &mut Rng) -> usize {
@@ -149,13 +143,13 @@ impl<S: Solution> Hive<S> {
         unreachable!();
     }
 
-    fn execute(&self, task: &Task, rng: &mut Rng) {
-        let current_working = self.current_working();
+    fn execute(&self, task: &Task, rng: &mut Rng) -> result::Result<()> {
+        let current_working = try!(self.current_working());
         let index = match *task {
             Task::Worker(n) => n,
             Task::Observer(_) => self.choose(&current_working, rng),
         };
-        self.work_on(&current_working, index);
+        self.work_on(&current_working, index)
     }
 
     fn run(&self, tasks: TaskGenerator) -> result::Result<()> {
@@ -175,7 +169,7 @@ impl<S: Solution> Hive<S> {
                         drop(guard);
 
                         match task {
-                            Some(t) => self.execute(&t, &mut rng),
+                            Some(t) => try!(self.execute(&t, &mut rng)),
                             None => break
                         };
                     }
