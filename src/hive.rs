@@ -9,6 +9,8 @@ use self::crossbeam::{scope, ScopedJoinHandle};
 
 use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::sync::{Mutex, RwLock, MutexGuard};
+use std::sync::mpsc::{Sender, Receiver, channel};
+use std::thread::spawn;
 
 use task::{TaskGenerator, Task};
 use candidate::{WorkingCandidate, Candidate};
@@ -26,6 +28,7 @@ pub struct Hive<S: Solution> {
     working: Vec<RwLock<WorkingCandidate<S>>>,
     best: Mutex<Candidate<S>>,
     tasks: Mutex<Option<TaskGenerator>>,
+    streaming: Option<Mutex<Sender<Candidate<S>>>>,
 
     threads: usize,
     scale: Box<ScalingFunction>,
@@ -80,6 +83,7 @@ impl<S: Solution> Hive<S> {
             working: working,
             best: best,
             tasks: Mutex::new(None),
+            streaming: None,
 
             threads: num_cpus::get(),
             scale: proportionate(),
@@ -111,6 +115,14 @@ impl<S: Solution> Hive<S> {
         let mut best_guard = try!(self.best.lock());
         if candidate.fitness > best_guard.fitness {
             *best_guard = candidate.clone();
+            if let Some(mutex) = self.streaming.as_ref() {
+                // We're streaming, so we need to post the improved candidate.
+                let sender_guard = try!(mutex.lock());
+                // If this errors, the receiver was dropped, so we're done.
+                if let Err(_) = sender_guard.send(candidate.clone()) {
+                    try!(self.stop());
+                }
+            }
         }
         Ok(())
     }
@@ -191,7 +203,9 @@ impl<S: Solution> Hive<S> {
                 }));
             }
 
-            // Return `Ok(())` only if all threads join cleanly.
+            // Return `Ok(())` only if all threads join cleanly, and the task
+            // cycle is successfully cleared away.
+            //
             // We avoid `try!` because we want all of the following logic to
             // execute unconditionally.
             handles.drain(..)
@@ -202,7 +216,7 @@ impl<S: Solution> Hive<S> {
         })
     }
 
-    /// Run a fixed number of rounds, then return the best solution found.
+    /// Runs for a fixed number of rounds, then return the best solution found.
     ///
     /// If one of the worker threads panics while working, this will return
     /// `Err(abc::Error)`. Otherwise, it will return `Ok` with a `Candidate`.
@@ -210,6 +224,21 @@ impl<S: Solution> Hive<S> {
         let tasks = TaskGenerator::new(self.workers, self.observers).max_rounds(rounds);
         try!(self.run(tasks));
         self.get().map(|guard| guard.clone())
+    }
+
+    /// Runs indefinitely in the background, providing a stream of results.
+    ///
+    /// This method consumes the hive, which will run until the `Hive` object
+    /// is dropped. It returns an `mpsc::Receiver`, which receives a
+    /// `Candidate` each time the hive improves on its best solution.
+    pub fn stream(mut self) -> Receiver<Candidate<S>> {
+        let (sender, receiver) = channel();
+        spawn(move|| {
+            let tasks = TaskGenerator::new(self.workers, self.observers);
+            self.streaming = Some(Mutex::new(sender));
+            self.run(tasks)
+        });
+        receiver
     }
 
     /// Get a guard for the current best solution found by the hive.

@@ -15,9 +15,7 @@ pub struct TaskGenerator {
 
 impl TaskGenerator {
     pub fn new(workers: usize, observers: usize) -> TaskGenerator {
-        if workers == 0 {
-            panic!("Expect at least one worker.");
-        }
+        assert!(workers > 0);
         TaskGenerator {
             workers: workers,
             observers: observers,
