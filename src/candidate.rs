@@ -19,6 +19,7 @@ pub struct Candidate<S: Solution> {
 }
 
 impl<S: Solution> Candidate<S> {
+    /// Wrap a solution with its cached fitness.
     pub fn new(solution: S) -> Candidate<S> {
         Candidate {
             fitness: solution.evaluate_fitness(),

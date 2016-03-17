@@ -1,4 +1,11 @@
-// #![warn(missing_docs)]
+//! Runs Karaboga's Artificial Bee Colony algorithm in parallel.
+//!
+//! To take advantage of this crate, the user must implement the
+//! [`Solution`](trait.Solution.html) trait for a type of their creation.
+//! A [`Hive`](struct.Hive.html) of the appropriate type can then be built,
+//! which will search the solution space for the fittest candidate.
+
+#![warn(missing_docs)]
 
 mod result;
 mod task;
@@ -6,7 +13,6 @@ mod solution;
 mod candidate;
 mod hive;
 
-#[allow(unused_attributes)]
 pub mod scaling;
 
 pub use result::{Error, Result};

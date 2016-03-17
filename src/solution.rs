@@ -21,7 +21,9 @@ use candidate::Candidate;
 /// struct Number(i32);
 ///
 /// impl Solution for Number {
-///     fn make() -> Number {
+///     type Builder = ();
+///
+///     fn make(_: &mut ()) -> Number {
 ///         let mut rng = rand::thread_rng();
 ///         let x = rng.gen_range(0, 100);
 ///         Number(x)
@@ -43,11 +45,20 @@ use candidate::Candidate;
 /// ```
 pub trait Solution : Clone + Send + Sync + 'static {
 
+    /// Factory that can be used to generate new solutions.
+    ///
+    /// In cases where the user wishes to generate new solutions based
+    /// on some set of parameters, or deterministically, the `Builder`
+    /// can hold necessary data.
+    ///
+    /// If no builder is necessary, this type can be `()`.
+    type Builder : Send;
+
     /// Generate a fresh, random solution.
     ///
     /// The name of this method has been chosen to avoid colliding with
     /// a presumed `Self::new(...)` method.
-    fn make() -> Self;
+    fn make(builder: &mut Self::Builder) -> Self;
 
     /// Discover the fitness of a solution (goal is to maximize).
     ///
@@ -65,11 +76,4 @@ pub trait Solution : Clone + Send + Sync + 'static {
     /// of [Candidates](struct.Candidate.html) that give information on the existing
     /// solutions, and the index of the solution to be modified.
     fn explore(solutions: &[Candidate<Self>], index: usize) -> Self;
-
-    // /// Change the probabilities with which solutions are chosen for work.
-    // ///
-    // /// The ABC algorithm includes *observer* bees, whose job is to work
-    // /// extra hard on especially promising solutions. By default, the
-    // /// scaling is
-    // fn scale_fitness(fitnesses: Vec<f64>) -> Vec<f64>;
 }

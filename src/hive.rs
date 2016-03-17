@@ -3,7 +3,7 @@ extern crate itertools;
 extern crate rand;
 extern crate crossbeam;
 
-use self::rand::Rng;
+use self::rand::{thread_rng, Rng};
 use self::itertools::Itertools;
 use self::crossbeam::{scope, ScopedJoinHandle};
 
@@ -16,11 +16,13 @@ use solution::Solution;
 use scaling::{ScalingFunction, proportionate};
 use result::{Result as AbcResult, Error as AbcError};
 
+/// Manages the running of the ABC algorithm.
 pub struct Hive<S: Solution> {
     workers: usize,
     observers: usize,
     retries: usize,
 
+    builder: Mutex<S::Builder>,
     working: Vec<RwLock<WorkingCandidate<S>>>,
     best: Mutex<Candidate<S>>,
     tasks: Mutex<Option<TaskGenerator>>,
@@ -41,13 +43,21 @@ impl<S: Solution + Debug> Debug for Hive<S> {
 }
 
 impl<S: Solution> Hive<S> {
-    pub fn new(workers: usize, observers: usize, retries: usize) -> Hive<S> {
+
+    /// Create a new hive.
+    ///
+    /// * `workers` - Number of working solution candidates to maintain at a time.
+    /// * `observers` - Number of "bees" that will randomly choose a candidate to
+    ///                 work on each round.
+    /// * `retries` - Number of times a candidate can be worked on without improvement,
+    ///               before it will be considered a local maximum and reinitialized.
+    pub fn new(mut builder: S::Builder, workers: usize, observers: usize, retries: usize) -> Hive<S> {
         if workers == 0 {
             panic!("Hive must have at least one worker.");
         }
 
         let mut candidates = (0..workers)
-            .map(|_| Candidate::new(S::make()))
+            .map(|_| Candidate::new(S::make(&mut builder)))
             .collect::<Vec<_>>();
 
         let best = {
@@ -66,6 +76,7 @@ impl<S: Solution> Hive<S> {
             observers: observers,
             retries: retries,
 
+            builder: Mutex::new(builder),
             working: working,
             best: best,
             tasks: Mutex::new(None),
@@ -75,11 +86,13 @@ impl<S: Solution> Hive<S> {
         }
     }
 
+    /// Set the number of worker threads to use while running.
     pub fn set_threads(mut self, threads: usize) -> Hive<S> {
         self.threads = threads;
         self
     }
 
+    /// Set the scaling function for observers to use.
     pub fn set_scaling(mut self, scale: Box<ScalingFunction>) -> Hive<S> {
         self.scale = scale;
         self
@@ -113,7 +126,9 @@ impl<S: Solution> Hive<S> {
             write_guard.deplete();
             // Scouting has been folded into the working process
             if write_guard.expired() {
-                let candidate = Candidate::new(S::make());
+                let mut builder = try!(self.builder.lock());
+                let candidate = Candidate::new(S::make(&mut builder));
+                drop(builder);
                 *write_guard = WorkingCandidate::new(candidate, self.retries);
                 try!(self.consider_improvement(&write_guard.candidate));
             }
@@ -121,7 +136,7 @@ impl<S: Solution> Hive<S> {
         Ok(())
     }
 
-    fn choose(&self, current_working: &[Candidate<S>], rng: &mut Rng) -> usize {
+    fn choose(&self, current_working: &[Candidate<S>]) -> usize {
         let fitnesses = (self.scale)(current_working.iter()
             .map(|candidate| candidate.fitness)
             .collect::<Vec<f64>>());
@@ -134,7 +149,7 @@ impl<S: Solution> Hive<S> {
             .collect::<Vec<f64>>();
 
         let total_fitness = running_totals.last().unwrap();
-        let choice_point = rng.next_f64() * total_fitness;
+        let choice_point = thread_rng().next_f64() * total_fitness;
 
         for (i, total) in running_totals.iter().enumerate() {
             if *total > choice_point {
@@ -144,11 +159,11 @@ impl<S: Solution> Hive<S> {
         unreachable!();
     }
 
-    fn execute(&self, task: &Task, rng: &mut Rng) -> AbcResult<()> {
+    fn execute(&self, task: &Task) -> AbcResult<()> {
         let current_working = try!(self.current_working());
         let index = match *task {
             Task::Worker(n) => n,
-            Task::Observer(_) => self.choose(&current_working, rng),
+            Task::Observer(_) => self.choose(&current_working),
         };
         self.work_on(&current_working, index)
     }
@@ -163,25 +178,34 @@ impl<S: Solution> Hive<S> {
         scope(|scope| {
             for _ in 0..self.threads {
                 handles.push(scope.spawn(|| {
-                    let mut rng = rand::thread_rng();
                     loop {
                         let mut guard = try!(self.tasks.lock());
                         let task = guard.as_mut().and_then(|gen| gen.next());
                         drop(guard);
 
                         match task {
-                            Some(t) => try!(self.execute(&t, &mut rng)),
+                            Some(t) => try!(self.execute(&t)),
                             None => return Ok(())
                         };
                     }
                 }));
             }
 
-            // Return Ok(()) only if all threads join cleanly.
-            handles.drain(..).fold(Ok(()), |result, handle| result.and(handle.join()))
+            // Return `Ok(())` only if all threads join cleanly.
+            // We avoid `try!` because we want all of the following logic to
+            // execute unconditionally.
+            handles.drain(..)
+                .fold(Ok(()), |result, handle| result.and(handle.join()))
+                .and(self.tasks.lock()
+                    .map(|mut tasks_guard| *tasks_guard = None)
+                    .map_err(AbcError::from))
         })
     }
 
+    /// Run a fixed number of rounds, then return the best solution found.
+    ///
+    /// If one of the worker threads panics while working, this will return
+    /// `Err(abc::Error)`. Otherwise, it will return `Ok` with a `Candidate`.
     pub fn run_for_rounds(&self, rounds: usize) -> AbcResult<Candidate<S>> {
         let tasks = TaskGenerator::new(self.workers, self.observers).max_rounds(rounds);
         try!(self.run(tasks));
@@ -200,13 +224,14 @@ impl<S: Solution> Hive<S> {
     /// # extern crate abc; use abc::{Solution, Candidate, Hive};
     /// # #[derive(Clone)] struct X;
     /// # impl Solution for X {
-    /// #     fn make() -> X { X }
+    /// #     type Builder = ();
+    /// #     fn make(_: &mut ()) -> X { X }
     /// #     fn evaluate_fitness(&self) -> f64 { 0_f64 }
     /// #     fn explore(field: &[Candidate<X>], n: usize) -> X { X }
     /// # }
     /// # fn do_stuff_with(x: Candidate<X>) {}
     /// # fn main() {
-    /// let hive: Hive<X> = Hive::new(5, 5, 5);
+    /// let hive: Hive<X> = Hive::new((), 5, 5, 5);
     /// let current_best = {
     ///     let guard = hive.get().unwrap();
     ///     guard.clone()
@@ -219,11 +244,20 @@ impl<S: Solution> Hive<S> {
         self.best.lock().map_err(AbcError::from)
     }
 
+    /// Stops a running hive.
+    ///
+    /// If a worker thread has panicked, this returns `Err(abc::Error)`.
     pub fn stop(&self) -> AbcResult<()> {
         let mut tasks_guard = try!(self.tasks.lock());
         Ok(tasks_guard.as_mut().map_or((), |t| t.stop()))
     }
 
+    /// Returns the current round of a running hive.
+    ///
+    /// If a worker thread has panicked and poisoned the task generator lock,
+    /// `get_round` will return `Err(abc::Error)`.
+    ///
+    /// If the hive has not been run, `get_round` will return `Ok(None)`.
     pub fn get_round(&self) -> AbcResult<Option<usize>> {
         let tasks_guard = try!(self.tasks.lock());
         Ok(tasks_guard.as_ref().map(|tasks| tasks.round))

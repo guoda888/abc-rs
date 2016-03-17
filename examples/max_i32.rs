@@ -9,7 +9,9 @@ use abc::{Solution, Candidate, Hive, scaling};
 struct Foo(i32);
 
 impl Solution for Foo {
-    fn make() -> Foo {
+    type Builder = ();
+
+    fn make(_: &mut ()) -> Foo {
         let mut rng = rand::thread_rng();
         let x = rng.gen_range(0, 100);
         Foo(x)
@@ -32,7 +34,7 @@ impl Solution for Foo {
 }
 
 fn main() {
-    let hive: Hive<Foo> = Hive::new(5, 4, 3)
+    let hive: Hive<Foo> = Hive::new((), 5, 4, 3)
         .set_threads(5)
         .set_scaling(scaling::power_rank(10f64));
     println!("{:?}", hive.run_for_rounds(1000));

@@ -32,6 +32,7 @@
 //! actual storage portion of a `Vec` is is heap-allocated, the scaling function
 //! should be reasonably well-behaved with respect to memory.
 
+/// Transform a set of fitnesses into weights for observers' random choices.
 pub type ScalingFunction = Fn(Vec<f64>) -> Vec<f64> + Send + Sync + 'static;
 
 /// Choose solutions in direct proportion to their fitness.
