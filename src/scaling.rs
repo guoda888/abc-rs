@@ -15,14 +15,14 @@
 //! # Examples
 //!
 //! Several constructors for scaling functions are available in this module.
-//! However, users may also implement custom scaling functions. These can
-//! exaggerate differences in fitness:
+//! However, users may also implement custom scaling functions. These can,
+//! for example, exaggerate differences in fitness:
 //!
 //! ```
 //! # extern crate abc; fn main() {
 //! Box::new(move |fitnesses: Vec<f64>| {
 //!     // Square the fitnesses.
-//!     fitnesses.iter().map(|fitness| fitness.powf(2f64)).collect::<Vec<_>>()
+//!     fitnesses.iter().map(|fitness| fitness.powf(2_f64)).collect::<Vec<_>>()
 //! });
 //! # }
 //! ```
@@ -66,7 +66,7 @@ pub fn power(k: f64) -> Box<ScalingFunction> {
 pub fn rank() -> Box<ScalingFunction> {
     // power_rank is be implemented on its own because composing scaling
     // functions involves allocating extra vectors, which we'd like to avoid.
-    power_rank(1f64)
+    power_rank(1_f64)
 }
 
 /// Choose solutions according to their rank, raised to a certain power.
@@ -95,7 +95,7 @@ pub fn power_rank(k: f64) -> Box<ScalingFunction> {
 
         // Create a blank (not empty) vector, so that we can use random access
         // to sort by original index.
-        let mut ranks = vec![0f64;with_indices.len()];
+        let mut ranks = vec![0_f64;with_indices.len()];
         for (rank_minus_one, &(index, _)) in with_indices.iter().enumerate() {
             ranks[index] = ((rank_minus_one + 1) as f64).powf(k);
         }
