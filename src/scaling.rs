@@ -1,4 +1,5 @@
-//! Manipulate the probabilities of working on different solutions.
+
+//! Manipulates the probabilities of working on different solutions.
 //!
 //! A portion of the bees in an artificial bee colony are tasked with observing
 //! the dedicated workers, and doing extra work on promising solutions. To
@@ -35,14 +36,14 @@
 /// Transform a set of fitnesses into weights for observers' random choices.
 pub type ScalingFunction = Fn(Vec<f64>) -> Vec<f64> + Send + Sync + 'static;
 
-/// Choose solutions in direct proportion to their fitness.
+/// Chooses solutions in direct proportion to their fitness.
 ///
 /// scaled<sub>*i*</sub> = fitness<sub>*i*</sub>
 pub fn proportionate() -> Box<ScalingFunction> {
     Box::new(move |fitnesses: Vec<f64>| fitnesses)
 }
 
-/// Choose more fit solutions exponentially more often.
+/// Chooses more fit solutions exponentially more often.
 ///
 /// scaled<sub>*i*</sub> = fitness<sub>*i*</sub><sup>*k*</sup>
 pub fn power(k: f64) -> Box<ScalingFunction> {
@@ -54,7 +55,7 @@ pub fn power(k: f64) -> Box<ScalingFunction> {
     })
 }
 
-/// Choose solutions according to their rank.
+/// Chooses solutions according to their rank.
 ///
 /// Rather than use the fitness directly, this formula ranks the N solutions
 /// 1 to N, in ascending order of fitness, then chooses in proportion to the
@@ -69,7 +70,7 @@ pub fn rank() -> Box<ScalingFunction> {
     power_rank(1_f64)
 }
 
-/// Choose solutions according to their rank, raised to a certain power.
+/// Chooses solutions according to their rank, raised to a certain power.
 ///
 /// This scaling formula was proposed by Yudong Zhang et al for the
 /// Fitness-Scaling Chaotic ABC in the 2013 volume of *Mathematical Problems

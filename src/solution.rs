@@ -54,13 +54,13 @@ pub trait Solution : Clone + Send + Sync + 'static {
     /// If no builder is necessary, this type can be `()`.
     type Builder : Send;
 
-    /// Generate a fresh, random solution.
+    /// Generates a fresh, random solution.
     ///
     /// The name of this method has been chosen to avoid colliding with
     /// a presumed `Self::new(...)` method.
     fn make(builder: &mut Self::Builder) -> Self;
 
-    /// Discover the fitness of a solution (goal is to maximize).
+    /// Discovers the fitness of a solution (goal is to maximize).
     ///
     /// Finding an optimal solution depends on having a way to determine
     /// the fitness of one solution compared with another. Because there
@@ -68,7 +68,7 @@ pub trait Solution : Clone + Send + Sync + 'static {
     /// own `evaluate_fitness` function.
     fn evaluate_fitness(&self) -> f64;
 
-    /// Look "near" an existing solution.
+    /// Looks "near" an existing solution.
     ///
     /// The user may wish to use information from the other solutions to
     /// build a variant of a given solution. So, rather than simply
