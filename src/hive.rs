@@ -46,7 +46,7 @@ impl<S: Solution + Debug> Debug for Hive<S> {
 }
 
 impl<S: Solution> Hive<S> {
-    /// Create a new hive.
+    /// Creates a new hive.
     ///
     /// * `workers` - Number of working solution candidates to maintain at a time.
     /// * `observers` - Number of "bees" that will randomly choose a candidate to
@@ -99,13 +99,13 @@ impl<S: Solution> Hive<S> {
         }
     }
 
-    /// Set the number of worker threads to use while running.
+    /// Sets the number of worker threads to use while running.
     pub fn set_threads(mut self, threads: usize) -> Hive<S> {
         self.threads = threads;
         self
     }
 
-    /// Set the scaling function for observers to use.
+    /// Sets the scaling function for observers to use.
     pub fn set_scaling(mut self, scale: Box<ScalingFunction>) -> Hive<S> {
         self.scale = scale;
         self
@@ -212,7 +212,7 @@ impl<S: Solution> Hive<S> {
                 }));
             }
 
-            // Return `Ok(())` only if all threads join cleanly, and the task
+            // Returns `Ok(())` only if all threads join cleanly, and the task
             // cycle is successfully cleared away.
             //
             // We avoid `try!` because we want all of the following logic to
@@ -251,7 +251,7 @@ impl<S: Solution> Hive<S> {
         receiver
     }
 
-    /// Get a guard for the current best solution found by the hive.
+    /// Returns a guard for the current best solution found by the hive.
     ///
     /// If the hive is running, you should drop the guard returned by this
     /// function as soon as convenient, since the logic of the hive can block
