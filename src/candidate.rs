@@ -10,7 +10,6 @@ use solution::Solution;
 /// method may be very expensive, so the `Candidate` struct caches the
 /// computed fitness of its solution.
 pub struct Candidate<S: Solution> {
-
     /// Actual candidate solution.
     pub solution: S,
 

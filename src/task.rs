@@ -76,18 +76,16 @@ mod tests {
         use super::*;
         let tg = TaskGenerator::new(3, 2).max_rounds(2);
         let gathered: Vec<_> = tg.collect();
-        let expected = [
-            Task::Worker(0),
-            Task::Worker(1),
-            Task::Worker(2),
-            Task::Observer(0),
-            Task::Observer(1),
-            Task::Worker(0),
-            Task::Worker(1),
-            Task::Worker(2),
-            Task::Observer(0),
-            Task::Observer(1),
-        ];
+        let expected = [Task::Worker(0),
+                        Task::Worker(1),
+                        Task::Worker(2),
+                        Task::Observer(0),
+                        Task::Observer(1),
+                        Task::Worker(0),
+                        Task::Worker(1),
+                        Task::Worker(2),
+                        Task::Observer(0),
+                        Task::Observer(1)];
         assert_eq!(gathered.len(), expected.len());
         assert!(gathered.iter().zip(expected.iter()).all(|(x, y)| *x == *y));
     }

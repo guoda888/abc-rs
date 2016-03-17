@@ -46,7 +46,6 @@ impl<S: Solution + Debug> Debug for Hive<S> {
 }
 
 impl<S: Solution> Hive<S> {
-
     /// Create a new hive.
     ///
     /// * `workers` - Number of working solution candidates to maintain at a time.
@@ -54,25 +53,35 @@ impl<S: Solution> Hive<S> {
     ///                 work on each round.
     /// * `retries` - Number of times a candidate can be worked on without improvement,
     ///               before it will be considered a local maximum and reinitialized.
-    pub fn new(mut builder: S::Builder, workers: usize, observers: usize, retries: usize) -> Hive<S> {
+    pub fn new(mut builder: S::Builder,
+               workers: usize,
+               observers: usize,
+               retries: usize)
+               -> Hive<S> {
         if workers == 0 {
             panic!("Hive must have at least one worker.");
         }
 
         let mut candidates = (0..workers)
-            .map(|_| Candidate::new(S::make(&mut builder)))
-            .collect::<Vec<_>>();
+                                 .map(|_| Candidate::new(S::make(&mut builder)))
+                                 .collect::<Vec<_>>();
 
         let best = {
             let best_candidate = candidates.iter()
-                .fold1(|best, next| if next.fitness > best.fitness { next } else { best })
-                .unwrap();
+                                           .fold1(|best, next| {
+                                               if next.fitness > best.fitness {
+                                                   next
+                                               } else {
+                                                   best
+                                               }
+                                           })
+                                           .unwrap();
             Mutex::new(best_candidate.clone())
         };
 
         let working = candidates.drain(..)
-            .map(|c| RwLock::new(WorkingCandidate::new(c, retries)))
-            .collect::<Vec<_>>();
+                                .map(|c| RwLock::new(WorkingCandidate::new(c, retries)))
+                                .collect::<Vec<_>>();
 
         Hive {
             workers: workers,
@@ -150,15 +159,15 @@ impl<S: Solution> Hive<S> {
 
     fn choose(&self, current_working: &[Candidate<S>]) -> usize {
         let fitnesses = (self.scale)(current_working.iter()
-            .map(|candidate| candidate.fitness)
-            .collect::<Vec<f64>>());
+                                                    .map(|candidate| candidate.fitness)
+                                                    .collect::<Vec<f64>>());
 
         let running_totals = fitnesses.iter()
-            .scan(0f64, |total, fitness| {
-                *total += *fitness;
-                Some(*total)
-            })
-            .collect::<Vec<f64>>();
+                                      .scan(0f64, |total, fitness| {
+                                          *total += *fitness;
+                                          Some(*total)
+                                      })
+                                      .collect::<Vec<f64>>();
 
         let total_fitness = running_totals.last().unwrap();
         let choice_point = thread_rng().next_f64() * total_fitness;
@@ -197,7 +206,7 @@ impl<S: Solution> Hive<S> {
 
                         match task {
                             Some(t) => try!(self.execute(&t)),
-                            None => return Ok(())
+                            None => return Ok(()),
                         };
                     }
                 }));
@@ -209,10 +218,11 @@ impl<S: Solution> Hive<S> {
             // We avoid `try!` because we want all of the following logic to
             // execute unconditionally.
             handles.drain(..)
-                .fold(Ok(()), |result, handle| result.and(handle.join()))
-                .and(self.tasks.lock()
-                    .map(|mut tasks_guard| *tasks_guard = None)
-                    .map_err(AbcError::from))
+                   .fold(Ok(()), |result, handle| result.and(handle.join()))
+                   .and(self.tasks
+                            .lock()
+                            .map(|mut tasks_guard| *tasks_guard = None)
+                            .map_err(AbcError::from))
         })
     }
 
@@ -233,7 +243,7 @@ impl<S: Solution> Hive<S> {
     /// `Candidate` each time the hive improves on its best solution.
     pub fn stream(mut self) -> Receiver<Candidate<S>> {
         let (sender, receiver) = channel();
-        spawn(move|| {
+        spawn(move || {
             let tasks = TaskGenerator::new(self.workers, self.observers);
             self.streaming = Some(Mutex::new(sender));
             self.run(tasks)
