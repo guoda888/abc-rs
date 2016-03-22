@@ -335,6 +335,6 @@ impl<S: Solution + Debug> Debug for Hive<S> {
 
 impl<S: Solution> Drop for Hive<S> {
     fn drop(&mut self) {
-        self.stop().unwrap()
+        self.stop().unwrap_or(())
     }
 }
