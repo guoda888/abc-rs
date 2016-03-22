@@ -205,6 +205,8 @@ impl<S: Solution> Swarm<S> {
                                       })
                                       .collect::<Vec<f64>>();
 
+        // Multiplying the choice point is equivalent to, and more efficient than, normalizing
+        // all of the scaled fitnesses and having a choice point in [0,1)
         let total_fitness = running_totals.last().unwrap();
         let choice_point = thread_rng().next_f64() * total_fitness;
 

@@ -57,8 +57,8 @@
 //!     }
 //!
 //!     fn explore(field: &[Candidate<S>], index: usize) -> S {
-//!         // new[i] = current[i] + phi * (current[i] - other[i]), where:
-//!         //      -1.0 <= phi <= 1.0
+//!         // new[i] = current[i] + Φ * (current[i] - other[i]), where:
+//!         //      -1.0 <= Φ <= 1.0
 //!         //      other is a solution, other than current, chosen at random
 //!
 //!         let S(ref current) = field[index].solution;
