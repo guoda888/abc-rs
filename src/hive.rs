@@ -19,13 +19,71 @@ use solution::Solution;
 use scaling::{ScalingFunction, proportionate};
 use result::{Result as AbcResult, Error as AbcError};
 
-struct Ready<S: Solution> {
-    working: Vec<RwLock<WorkingCandidate<S>>>,
-    best: Mutex<Candidate<S>>,
+/// Manages the parameters of the ABC algorithm.
+pub struct Hive<S: Solution> {
+    workers: usize,
+    observers: usize,
+    retries: usize,
+    builder: Mutex<S::Builder>,
+    threads: usize,
+    scale: Box<ScalingFunction>,
 }
 
-impl<S: Solution> Ready<S> {
-    fn new(hive: &Hive<S>) -> AbcResult<Ready<S>> {
+impl<S: Solution> Hive<S> {
+    /// Creates a new hive.
+    ///
+    /// * `workers` - Number of working solution candidates to maintain at a time.
+    /// * `observers` - Number of "bees" that will randomly choose a candidate to
+    ///                 work on each round.
+    /// * `retries` - Number of times a candidate can be worked on without improvement,
+    ///               before it will be considered a local maximum and reinitialized.
+    pub fn new(builder: S::Builder, workers: usize, observers: usize, retries: usize) -> Hive<S> {
+        if workers == 0 {
+            panic!("Hive must have at least one worker.");
+        }
+
+        Hive {
+            workers: workers,
+            observers: observers,
+            retries: retries,
+
+            builder: Mutex::new(builder),
+            threads: num_cpus::get(),
+            scale: proportionate(),
+        }
+    }
+
+    /// Sets the number of worker threads to use while running.
+    pub fn set_threads(mut self, threads: usize) -> Hive<S> {
+        self.threads = threads;
+        self
+    }
+
+    /// Sets the scaling function for observers to use.
+    pub fn set_scaling(mut self, scale: Box<ScalingFunction>) -> Hive<S> {
+        self.scale = scale;
+        self
+    }
+
+    /// Activates the `Hive` to create a runnable object.
+    pub fn swarm(self) -> AbcResult<Swarm<S>> {
+        Swarm::new(self)
+    }
+}
+
+/// Runs the ABC algorithm, maintaining any necessary state.
+pub struct Swarm<S: Solution> {
+    hive: Hive<S>,
+
+    working: Vec<RwLock<WorkingCandidate<S>>>,
+    best: Mutex<Candidate<S>>,
+
+    tasks: Mutex<Option<TaskGenerator>>,
+    streaming: Option<Mutex<Sender<Candidate<S>>>>,
+}
+
+impl<S: Solution> Swarm<S> {
+    fn new(hive: Hive<S>) -> AbcResult<Swarm<S>> {
         let tokens: Mutex<Range<usize>> = Mutex::new(0..hive.workers);
         let candidates = Mutex::new(Vec::with_capacity(hive.workers));
         let mut handles = Vec::with_capacity(hive.threads);
@@ -36,7 +94,7 @@ impl<S: Solution> Ready<S> {
                     while let Some(_) = tokens.lock().unwrap().next() {
                         let mut builder = match hive.builder.lock() {
                             Ok(b) => b,
-                            Err(err) => return Err(AbcError::from(err))
+                            Err(err) => return Err(AbcError::from(err)),
                         };
                         let solution = S::make(&mut builder);
                         drop(builder);
@@ -48,31 +106,34 @@ impl<S: Solution> Ready<S> {
             }
 
             handles.drain(..)
-            .fold(Ok(()), |result, handle| result.and(handle.join()))
+                   .fold(Ok(()), |result, handle| result.and(handle.join()))
         }));
 
         let mut candidates = try!(candidates.into_inner());
 
         let best = {
             let best_candidate = candidates.iter()
-            .fold1(|best, next| {
-                if next.fitness > best.fitness {
-                    next
-                } else {
-                    best
-                }
-            })
-            .unwrap();
+                                           .fold1(|best, next| {
+                                               if next.fitness > best.fitness {
+                                                   next
+                                               } else {
+                                                   best
+                                               }
+                                           })
+                                           .unwrap();
             Mutex::new(best_candidate.clone())
         };
 
         let working = candidates.drain(..)
-        .map(|c| RwLock::new(WorkingCandidate::new(c, hive.retries)))
-        .collect::<Vec<_>>();
+                                .map(|c| RwLock::new(WorkingCandidate::new(c, hive.retries)))
+                                .collect::<Vec<_>>();
 
-        Ok(Ready {
+        Ok(Swarm {
             working: working,
             best: best,
+            hive: hive,
+            tasks: Mutex::new(None),
+            streaming: None,
         })
     }
 
@@ -95,95 +156,9 @@ impl<S: Solution> Ready<S> {
     pub fn get(&self) -> AbcResult<MutexGuard<Candidate<S>>> {
         self.best.lock().map_err(AbcError::from)
     }
-}
-
-/// Manages the running of the ABC algorithm.
-pub struct Hive<S: Solution> {
-    workers: usize,
-    observers: usize,
-    retries: usize,
-
-    builder: Mutex<S::Builder>,
-    tasks: Mutex<Option<TaskGenerator>>,
-    streaming: Option<Mutex<Sender<Candidate<S>>>>,
-
-    state: Option<Ready<S>>,
-
-    threads: usize,
-    scale: Box<ScalingFunction>,
-}
-
-impl<S: Solution + Debug> Debug for Ready<S> {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        for mutex in (&self.working).iter() {
-            let working = mutex.read().unwrap();
-            try!(write!(f, "..{:?}..\n", working.candidate));
-        }
-        let best_candidate = self.get().unwrap();
-        write!(f, ">>{:?}<<", *best_candidate)
-    }
-}
-
-impl<S: Solution> Hive<S> {
-    /// Creates a new hive.
-    ///
-    /// * `workers` - Number of working solution candidates to maintain at a time.
-    /// * `observers` - Number of "bees" that will randomly choose a candidate to
-    ///                 work on each round.
-    /// * `retries` - Number of times a candidate can be worked on without improvement,
-    ///               before it will be considered a local maximum and reinitialized.
-    pub fn new(builder: S::Builder,
-               workers: usize,
-               observers: usize,
-               retries: usize)
-               -> Hive<S> {
-        if workers == 0 {
-            panic!("Hive must have at least one worker.");
-        }
-
-        let mut hive = Hive {
-            workers: workers,
-            observers: observers,
-            retries: retries,
-
-            builder: Mutex::new(builder),
-            tasks: Mutex::new(None),
-            streaming: None,
-            state: None,
-
-            threads: num_cpus::get(),
-            scale: proportionate(),
-        };
-
-        hive.initialize().unwrap();
-        hive
-    }
-
-    /// Sets the number of worker threads to use while running.
-    pub fn set_threads(mut self, threads: usize) -> Hive<S> {
-        self.threads = threads;
-        self
-    }
-
-    /// Sets the scaling function for observers to use.
-    pub fn set_scaling(mut self, scale: Box<ScalingFunction>) -> Hive<S> {
-        self.scale = scale;
-        self
-    }
-
-    fn initialize(&mut self) -> AbcResult<()> {
-        let ready = try!(Ready::new(&self));
-        self.state = Some(ready);
-        Ok(())
-    }
-
-    fn ready(&self) -> &Ready<S> {
-        self.state.as_ref().unwrap()
-    }
 
     fn consider_improvement(&self, candidate: &Candidate<S>) -> AbcResult<()> {
-        let ready = self.ready();
-        let mut best_guard = try!(ready.best.lock());
+        let mut best_guard = try!(self.best.lock());
         if candidate.fitness > best_guard.fitness {
             *best_guard = candidate.clone();
             if let Some(mutex) = self.streaming.as_ref() {
@@ -200,20 +175,18 @@ impl<S: Solution> Hive<S> {
 
     fn work_on(&self, current_working: &[Candidate<S>], n: usize) -> AbcResult<()> {
         let variant = Candidate::new(S::explore(current_working, n));
-        let ready = self.ready();
-
-        let mut write_guard = try!(ready.working[n].write());
+        let mut write_guard = try!(self.working[n].write());
         if variant.fitness > write_guard.candidate.fitness {
-            *write_guard = WorkingCandidate::new(variant, self.retries);
+            *write_guard = WorkingCandidate::new(variant, self.hive.retries);
             try!(self.consider_improvement(&write_guard.candidate));
         } else {
             write_guard.deplete();
             // Scouting has been folded into the working process
             if write_guard.expired() {
-                let mut builder = try!(self.builder.lock());
+                let mut builder = try!(self.hive.builder.lock());
                 let candidate = Candidate::new(S::make(&mut builder));
                 drop(builder);
-                *write_guard = WorkingCandidate::new(candidate, self.retries);
+                *write_guard = WorkingCandidate::new(candidate, self.hive.retries);
                 try!(self.consider_improvement(&write_guard.candidate));
             }
         }
@@ -221,9 +194,9 @@ impl<S: Solution> Hive<S> {
     }
 
     fn choose(&self, current_working: &[Candidate<S>]) -> usize {
-        let fitnesses = (self.scale)(current_working.iter()
-                                                    .map(|candidate| candidate.fitness)
-                                                    .collect::<Vec<f64>>());
+        let fitnesses = (self.hive.scale)(current_working.iter()
+                                                         .map(|candidate| candidate.fitness)
+                                                         .collect::<Vec<f64>>());
 
         let running_totals = fitnesses.iter()
                                       .scan(0f64, |total, fitness| {
@@ -244,8 +217,7 @@ impl<S: Solution> Hive<S> {
     }
 
     fn execute(&self, task: &Task) -> AbcResult<()> {
-        let ready = self.ready();
-        let current_working = try!(ready.current_working());
+        let current_working = try!(self.current_working());
         let index = match *task {
             Task::Worker(n) => n,
             Task::Observer(_) => self.choose(&current_working),
@@ -258,10 +230,11 @@ impl<S: Solution> Hive<S> {
         *guard = Some(tasks);
         drop(guard);
 
-        let mut handles: Vec<ScopedJoinHandle<AbcResult<()>>> = Vec::with_capacity(self.threads);
+        let mut handles: Vec<ScopedJoinHandle<AbcResult<()>>> = Vec::with_capacity(self.hive
+                                                                                       .threads);
 
         scope(|scope| {
-            for _ in 0..self.threads {
+            for _ in 0..self.hive.threads {
                 handles.push(scope.spawn(|| {
                     loop {
                         let mut guard = try!(self.tasks.lock());
@@ -295,11 +268,9 @@ impl<S: Solution> Hive<S> {
     /// If one of the worker threads panics while working, this will return
     /// `Err(abc::Error)`. Otherwise, it will return `Ok` with a `Candidate`.
     pub fn run_for_rounds(&self, rounds: usize) -> AbcResult<Candidate<S>> {
-        let tasks = TaskGenerator::new(self.workers, self.observers).max_rounds(rounds);
-        let ready = self.ready();
+        let tasks = TaskGenerator::new(self.hive.workers, self.hive.observers).max_rounds(rounds);
         try!(self.run(tasks));
-        let guard = try!(ready.get());
-        Ok(guard.clone())
+        self.get().map(|guard| guard.clone())
     }
 
     /// Runs indefinitely in the background, providing a stream of results.
@@ -310,7 +281,7 @@ impl<S: Solution> Hive<S> {
     pub fn stream(mut self) -> Receiver<Candidate<S>> {
         let (sender, receiver) = channel();
         spawn(move || {
-            let tasks = TaskGenerator::new(self.workers, self.observers);
+            let tasks = TaskGenerator::new(self.hive.workers, self.hive.observers);
             self.streaming = Some(Mutex::new(sender));
             self.run(tasks)
         });
@@ -337,7 +308,18 @@ impl<S: Solution> Hive<S> {
     }
 }
 
-impl<S: Solution> Drop for Hive<S> {
+impl<S: Solution + Debug> Debug for Swarm<S> {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        for mutex in (&self.working).iter() {
+            let working = mutex.read().unwrap();
+            try!(write!(f, "..{:?}..\n", working.candidate));
+        }
+        let best_candidate = self.get().unwrap();
+        write!(f, ">>{:?}<<", *best_candidate)
+    }
+}
+
+impl<S: Solution> Drop for Swarm<S> {
     fn drop(&mut self) {
         self.stop().unwrap()
     }

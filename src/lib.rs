@@ -82,7 +82,7 @@
 //! fn main() {
 //!     let mut builder = SBuilder { min: -5.12, max: 5.12 };
 //!     let hive = Hive::<S>::new(builder, 10, 10, 10);
-//!     println!("{:?}", hive.run_for_rounds(100).unwrap());
+//!     println!("{:?}", hive.swarm().unwrap().run_for_rounds(100).unwrap());
 //! }
 //! ```
 
@@ -99,4 +99,4 @@ pub mod scaling;
 pub use result::{Error, Result};
 pub use solution::Solution;
 pub use candidate::Candidate;
-pub use hive::Hive;
+pub use hive::{Swarm, Hive};

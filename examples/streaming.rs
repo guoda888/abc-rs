@@ -37,7 +37,12 @@ fn main() {
     let hive: Hive<Foo> = Hive::new((), 5, 4, 3)
         .set_threads(5)
         .set_scaling(scaling::power_rank(10f64));
-    for candidate in hive.stream().iter().skip_while(|c| c.fitness < 200_f64).take(5) {
+    for candidate in hive.swarm()
+                         .unwrap()
+                         .stream()
+                         .iter()
+                         .skip_while(|c| c.fitness < 200_f64)
+                         .take(5) {
         println!("{:?}", candidate);
     }
 }
