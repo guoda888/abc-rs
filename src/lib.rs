@@ -16,7 +16,7 @@
 //!
 //! use std::f32::consts::PI;
 //! use rand::{random, Closed01, thread_rng, Rng};
-//! use abc::{Solution, Candidate, Hive};
+//! use abc::{Solution, Candidate, HiveBuilder};
 //!
 //! const SIZE: usize = 10;
 //!
@@ -81,8 +81,8 @@
 //!
 //! fn main() {
 //!     let mut builder = SBuilder { min: -5.12, max: 5.12 };
-//!     let hive = Hive::<S>::new(builder, 10);
-//!     println!("{:?}", hive.swarm().unwrap().run_for_rounds(100).unwrap());
+//!     let hive = HiveBuilder::<S>::new(builder, 10);
+//!     println!("{:?}", hive.build().unwrap().run_for_rounds(100).unwrap());
 //! }
 //! ```
 
@@ -99,4 +99,4 @@ pub mod scaling;
 pub use result::{Error, Result};
 pub use solution::Solution;
 pub use candidate::Candidate;
-pub use hive::{Swarm, Hive};
+pub use hive::{HiveBuilder, Hive};

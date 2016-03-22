@@ -3,7 +3,7 @@ extern crate rand;
 
 use rand::Rng;
 
-use abc::{Solution, Candidate, Hive, scaling};
+use abc::{Solution, Candidate, HiveBuilder, scaling};
 
 #[derive(Clone, Debug)]
 struct Foo(i32);
@@ -34,8 +34,8 @@ impl Solution for Foo {
 }
 
 fn main() {
-    let hive: Hive<Foo> = Hive::new((), 5)
+    let hive = HiveBuilder::<Foo>::new((), 5)
         .set_threads(5)
         .set_scaling(scaling::power_rank(10_f64));
-    println!("{:?}", hive.swarm().unwrap().run_for_rounds(1_000));
+    println!("{:?}", hive.build().unwrap().run_for_rounds(1_000));
 }

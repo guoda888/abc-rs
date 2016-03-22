@@ -20,7 +20,7 @@ use scaling::{ScalingFunction, proportionate};
 use result::{Result as AbcResult, Error as AbcError};
 
 /// Manages the parameters of the ABC algorithm.
-pub struct Hive<S: Solution> {
+pub struct HiveBuilder<S: Solution> {
     workers: usize,
     observers: usize,
     retries: usize,
@@ -29,17 +29,17 @@ pub struct Hive<S: Solution> {
     scale: Box<ScalingFunction>,
 }
 
-impl<S: Solution> Hive<S> {
+impl<S: Solution> HiveBuilder<S> {
     /// Creates a new hive.
     ///
     /// * `builder` - Factory-like state that can be used while generating solutions.
     /// * `workers` - Number of working solution candidates to maintain at a time.
-    pub fn new(builder: S::Builder, workers: usize) -> Hive<S> {
+    pub fn new(builder: S::Builder, workers: usize) -> HiveBuilder<S> {
         if workers == 0 {
-            panic!("Hive must have at least one worker.");
+            panic!("HiveBuilder must have at least one worker.");
         }
 
-        Hive {
+        HiveBuilder {
             workers: workers,
             observers: workers,
             retries: workers,
@@ -53,7 +53,7 @@ impl<S: Solution> Hive<S> {
     /// Sets the number of "bees" that will pick a candidate to work on at random.
     ///
     /// This defaults to the number of workers.
-    pub fn set_observers(mut self, observers: usize) -> Hive<S> {
+    pub fn set_observers(mut self, observers: usize) -> HiveBuilder<S> {
         self.observers = observers;
         self
     }
@@ -61,32 +61,32 @@ impl<S: Solution> Hive<S> {
     /// Sets the number of times a candidate can go unimproved before being reinitialized.
     ///
     /// This defaults to the number of workers.
-    pub fn set_retries(mut self, retries: usize) -> Hive<S> {
+    pub fn set_retries(mut self, retries: usize) -> HiveBuilder<S> {
         self.retries = retries;
         self
     }
 
     /// Sets the number of worker threads to use while running.
-    pub fn set_threads(mut self, threads: usize) -> Hive<S> {
+    pub fn set_threads(mut self, threads: usize) -> HiveBuilder<S> {
         self.threads = threads;
         self
     }
 
     /// Sets the scaling function for observers to use.
-    pub fn set_scaling(mut self, scale: Box<ScalingFunction>) -> Hive<S> {
+    pub fn set_scaling(mut self, scale: Box<ScalingFunction>) -> HiveBuilder<S> {
         self.scale = scale;
         self
     }
 
-    /// Activates the `Hive` to create a runnable object.
-    pub fn swarm(self) -> AbcResult<Swarm<S>> {
-        Swarm::new(self)
+    /// Activates the `HiveBuilder` to create a runnable object.
+    pub fn build(self) -> AbcResult<Hive<S>> {
+        Hive::new(self)
     }
 }
 
 /// Runs the ABC algorithm, maintaining any necessary state.
-pub struct Swarm<S: Solution> {
-    hive: Hive<S>,
+pub struct Hive<S: Solution> {
+    hive: HiveBuilder<S>,
 
     working: Vec<RwLock<WorkingCandidate<S>>>,
     best: Mutex<Candidate<S>>,
@@ -95,8 +95,8 @@ pub struct Swarm<S: Solution> {
     streaming: Option<Mutex<Sender<Candidate<S>>>>,
 }
 
-impl<S: Solution> Swarm<S> {
-    fn new(hive: Hive<S>) -> AbcResult<Swarm<S>> {
+impl<S: Solution> Hive<S> {
+    fn new(hive: HiveBuilder<S>) -> AbcResult<Hive<S>> {
         let tokens: Mutex<Range<usize>> = Mutex::new(0..hive.workers);
         let candidates = Mutex::new(Vec::with_capacity(hive.workers));
         let mut handles = Vec::with_capacity(hive.threads);
@@ -141,7 +141,7 @@ impl<S: Solution> Swarm<S> {
                                 .map(|c| RwLock::new(WorkingCandidate::new(c, hive.retries)))
                                 .collect::<Vec<_>>();
 
-        Ok(Swarm {
+        Ok(Hive {
             working: working,
             best: best,
             hive: hive,
@@ -289,7 +289,7 @@ impl<S: Solution> Swarm<S> {
 
     /// Runs indefinitely in the background, providing a stream of results.
     ///
-    /// This method consumes the hive, which will run until the `Hive` object
+    /// This method consumes the hive, which will run until the `HiveBuilder` object
     /// is dropped. It returns an `mpsc::Receiver`, which receives a
     /// `Candidate` each time the hive improves on its best solution.
     pub fn stream(mut self) -> Receiver<Candidate<S>> {
@@ -322,7 +322,7 @@ impl<S: Solution> Swarm<S> {
     }
 }
 
-impl<S: Solution + Debug> Debug for Swarm<S> {
+impl<S: Solution + Debug> Debug for Hive<S> {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         for mutex in (&self.working).iter() {
             let working = mutex.read().unwrap();
@@ -333,7 +333,7 @@ impl<S: Solution + Debug> Debug for Swarm<S> {
     }
 }
 
-impl<S: Solution> Drop for Swarm<S> {
+impl<S: Solution> Drop for Hive<S> {
     fn drop(&mut self) {
         self.stop().unwrap()
     }
