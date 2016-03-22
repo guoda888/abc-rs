@@ -81,7 +81,7 @@
 //!
 //! fn main() {
 //!     let mut builder = SBuilder { min: -5.12, max: 5.12 };
-//!     let hive = Hive::<S>::new(builder, 10, 10, 10);
+//!     let hive = Hive::<S>::new(builder, 10);
 //!     println!("{:?}", hive.swarm().unwrap().run_for_rounds(100).unwrap());
 //! }
 //! ```

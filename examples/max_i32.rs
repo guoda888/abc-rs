@@ -34,7 +34,7 @@ impl Solution for Foo {
 }
 
 fn main() {
-    let hive: Hive<Foo> = Hive::new((), 5, 4, 3)
+    let hive: Hive<Foo> = Hive::new((), 5)
         .set_threads(5)
         .set_scaling(scaling::power_rank(10f64));
     println!("{:?}", hive.swarm().unwrap().run_for_rounds(1000));

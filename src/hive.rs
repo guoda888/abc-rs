@@ -32,25 +32,38 @@ pub struct Hive<S: Solution> {
 impl<S: Solution> Hive<S> {
     /// Creates a new hive.
     ///
+    /// * `builder` - Factory-like state that can be used while generating solutions.
     /// * `workers` - Number of working solution candidates to maintain at a time.
-    /// * `observers` - Number of "bees" that will randomly choose a candidate to
-    ///                 work on each round.
-    /// * `retries` - Number of times a candidate can be worked on without improvement,
-    ///               before it will be considered a local maximum and reinitialized.
-    pub fn new(builder: S::Builder, workers: usize, observers: usize, retries: usize) -> Hive<S> {
+    pub fn new(builder: S::Builder, workers: usize) -> Hive<S> {
         if workers == 0 {
             panic!("Hive must have at least one worker.");
         }
 
         Hive {
             workers: workers,
-            observers: observers,
-            retries: retries,
+            observers: workers,
+            retries: workers,
 
             builder: Mutex::new(builder),
             threads: num_cpus::get(),
             scale: proportionate(),
         }
+    }
+
+    /// Sets the number of "bees" that will pick a candidate to work on at random.
+    ///
+    /// This defaults to the number of workers.
+    pub fn set_observers(mut self, observers: usize) -> Hive<S> {
+        self.observers = observers;
+        self
+    }
+
+    /// Sets the number of times a candidate can go unimproved before being reinitialized.
+    ///
+    /// This defaults to the number of workers.
+    pub fn set_retries(mut self, retries: usize) -> Hive<S> {
+        self.retries = retries;
+        self
     }
 
     /// Sets the number of worker threads to use while running.
