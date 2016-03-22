@@ -73,7 +73,7 @@ pub trait Solution : Clone + Send + Sync + 'static {
     /// The user may wish to use information from the other solutions to
     /// build a variant of a given solution. So, rather than simply
     /// providing the solution to be varied, `explore` receives a vector
-    /// of [Candidates](struct.Candidate.html) that give information on the existing
-    /// solutions, and the index of the solution to be modified.
+    /// of [Candidates](struct.Candidate.html) that give information on the
+    /// existing solutions, and the index of the solution to be modified.
     fn explore(solutions: &[Candidate<Self>], index: usize) -> Self;
 }

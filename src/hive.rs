@@ -245,8 +245,7 @@ impl<S: Solution> Swarm<S> {
         *guard = Some(tasks);
         drop(guard);
 
-        let mut handles: Vec<ScopedJoinHandle<AbcResult<()>>> = Vec::with_capacity(self.hive
-                                                                                       .threads);
+        let mut handles: Vec<ScopedJoinHandle<AbcResult<()>>> = Vec::new();
 
         scope(|scope| {
             for _ in 0..self.hive.threads {
