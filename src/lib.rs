@@ -1,3 +1,8 @@
+#![crate_name = "abc"]
+#![crate_type = "lib"]
+
+#![warn(missing_docs)]
+
 //! Runs Karaboga's Artificial Bee Colony algorithm in parallel.
 //!
 //! To take advantage of this crate, the user must implement the
@@ -85,8 +90,6 @@
 //!     println!("{:?}", hive.build().unwrap().run_for_rounds(100).unwrap());
 //! }
 //! ```
-
-#![warn(missing_docs)]
 
 mod result;
 mod task;
