@@ -1,5 +1,6 @@
 #![crate_name = "abc"]
 #![crate_type = "lib"]
+#![doc(html_root_url = "https://daviddonna.github.io/abc-rs/")]
 
 #![warn(missing_docs)]
 
