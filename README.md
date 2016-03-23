@@ -3,4 +3,4 @@
 # abc-rs
 Karaboga's Artificial Bee Colony in Rust (now in parallel!)
 
-
+[Documentation](https://daviddonna.github.io/abc-rs)
