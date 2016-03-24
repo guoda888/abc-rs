@@ -82,6 +82,13 @@ impl<S: Solution> HiveBuilder<S> {
     pub fn build(self) -> AbcResult<Hive<S>> {
         Hive::new(self)
     }
+
+    fn new_candidate(&self) -> AbcResult<Candidate<S>> {
+        let mut builder = try!(self.builder.lock());
+        let solution = S::make(&mut builder);
+        drop(builder);
+        Ok(Candidate::new(solution))
+    }
 }
 
 /// Runs the ABC algorithm, maintaining any necessary state.
@@ -105,10 +112,7 @@ impl<S: Solution> Hive<S> {
             for _ in 0..hive.threads {
                 handles.push(scope.spawn(|| {
                     while let Some(_) = tokens.lock().unwrap().next() {
-                        let mut builder = try!(hive.builder.lock());
-                        let solution = S::make(&mut builder);
-                        drop(builder);
-                        let candidate = Candidate::new(solution);
+                        let candidate = try!(hive.new_candidate());
                         try!(candidates.lock()).push(candidate);
                     }
                     Ok(())
@@ -193,10 +197,7 @@ impl<S: Solution> Hive<S> {
             write_guard.deplete();
             // Scouting has been folded into the working process
             if write_guard.expired() {
-                let mut builder = try!(self.hive.builder.lock());
-                let solution = S::make(&mut builder);
-                drop(builder);
-                let candidate = Candidate::new(solution);
+                let candidate = try!(self.hive.new_candidate());
                 *write_guard = WorkingCandidate::new(candidate, self.hive.retries);
                 try!(self.consider_improvement(&write_guard.candidate));
             }
