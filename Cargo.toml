@@ -7,7 +7,7 @@ documentation = "https://daviddonna.github.io/abc-rs"
 repository = "https://github.com/daviddonna/abc-rs"
 readme = "README.md"
 keywords = ["AI", "optimization"]
-license-file = "LICENSE"
+license = "MTI"
 
 [lib]
 name = "abc"
