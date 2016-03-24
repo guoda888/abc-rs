@@ -99,16 +99,13 @@ impl<S: Solution> Hive<S> {
     fn new(hive: HiveBuilder<S>) -> AbcResult<Hive<S>> {
         let tokens: Mutex<Range<usize>> = Mutex::new(0..hive.workers);
         let candidates = Mutex::new(Vec::with_capacity(hive.workers));
-        let mut handles = Vec::with_capacity(hive.threads);
+        let mut handles = Vec::<ScopedJoinHandle<AbcResult<()>>>::with_capacity(hive.threads);
 
         try!(crossbeam::scope(|scope| {
             for _ in 0..hive.threads {
                 handles.push(scope.spawn(|| {
                     while let Some(_) = tokens.lock().unwrap().next() {
-                        let mut builder = match hive.builder.lock() {
-                            Ok(b) => b,
-                            Err(err) => return Err(AbcError::from(err)),
-                        };
+                        let mut builder = try!(hive.builder.lock());
                         let solution = S::make(&mut builder);
                         drop(builder);
                         let candidate = Candidate::new(solution);
@@ -197,8 +194,9 @@ impl<S: Solution> Hive<S> {
             // Scouting has been folded into the working process
             if write_guard.expired() {
                 let mut builder = try!(self.hive.builder.lock());
-                let candidate = Candidate::new(S::make(&mut builder));
+                let solution = S::make(&mut builder);
                 drop(builder);
+                let candidate = Candidate::new(solution);
                 *write_guard = WorkingCandidate::new(candidate, self.hive.retries);
                 try!(self.consider_improvement(&write_guard.candidate));
             }
