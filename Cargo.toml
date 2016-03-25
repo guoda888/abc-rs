@@ -1,6 +1,6 @@
 [package]
 name = "abc"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["David Donna <davidadonna@gmail.com>"]
 description = "An implementation of Karaboga's Artificial Bee Colony algorithm."
 documentation = "https://daviddonna.github.io/abc-rs"

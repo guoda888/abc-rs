@@ -1,5 +1,5 @@
-0.1.2 /
-=======
+0.1.2 / 2016/03/25
+==================
 
   * prevent workers from working on solutions that are being scouted
   * add a bunch of comments
