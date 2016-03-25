@@ -254,7 +254,12 @@ impl<S: Solution> Hive<S> {
     fn execute(&self, task: &Task) -> AbcResult<()> {
         let current_working = try!(self.current_working());
         let index = match *task {
-            Task::Worker(n) => n,
+            Task::Worker(n) => {
+                // If the worker's candidate is in the middle of being replaced, just skip it.
+                let scouting_guard = try!(self.scouting.read());
+                if scouting_guard.contains(&n) { return Ok(()) }
+                n
+            }
             Task::Observer(_) => try!(self.choose(&current_working)),
         };
         self.work_on(&current_working, index)
