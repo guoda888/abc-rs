@@ -87,8 +87,27 @@
 //!
 //! fn main() {
 //!     let mut builder = SBuilder { min: -5.12, max: 5.12 };
-//!     let hive = HiveBuilder::<S>::new(builder, 10);
-//!     println!("{:?}", hive.build().unwrap().run_for_rounds(100).unwrap());
+//!     let hive_builder = HiveBuilder::<S>::new(builder, 10);
+//!     let hive = hive_builder.build().unwrap();
+//!
+//!     // Once built, the hive can be run for a number of rounds.
+//!     let best_after_100 = hive.run_for_rounds(100).unwrap();
+//!
+//!     // As long as it's run some rounds at a time, you can keep running it.
+//!     let best_after_200 = hive.run_for_rounds(100).unwrap();
+//!
+//!     // The algorithm doesn't guarantee improvement in any number of rounds,
+//!     // but it always keeps its all-time best.
+//!     assert!(best_after_200.fitness >= best_after_100.fitness);
+//!
+//!     // The hive can be consumed to create a Receiver object. This can be
+//!     // iterated over indefinitely, and will receive successive improvements
+//!     // on the best candidate so far.
+//!     let mut current_best_fitness = best_after_200.fitness;
+//!     for new_best in hive.stream().iter().take(5) {
+//!         assert!(new_best.fitness > current_best_fitness);
+//!         current_best_fitness = new_best.fitness;
+//!     }
 //! }
 //! ```
 
