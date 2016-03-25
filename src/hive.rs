@@ -12,6 +12,7 @@ use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::sync::{Mutex, RwLock, MutexGuard};
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread::spawn;
+use std::collections::BTreeSet;
 
 use task::{TaskGenerator, Task};
 use candidate::{WorkingCandidate, Candidate};
@@ -97,6 +98,7 @@ pub struct Hive<S: Solution> {
 
     working: Vec<RwLock<WorkingCandidate<S>>>,
     best: Mutex<Candidate<S>>,
+    scouting: RwLock<BTreeSet<usize>>,
 
     tasks: Mutex<Option<TaskGenerator>>,
     streaming: Option<Mutex<Sender<Candidate<S>>>>,
@@ -143,9 +145,10 @@ impl<S: Solution> Hive<S> {
                                 .collect::<Vec<_>>();
 
         Ok(Hive {
+            hive: hive,
             working: working,
             best: best,
-            hive: hive,
+            scouting: RwLock::new(BTreeSet::new()),
             tasks: Mutex::new(None),
             streaming: None,
         })
@@ -197,44 +200,62 @@ impl<S: Solution> Hive<S> {
             write_guard.deplete();
             // Scouting has been folded into the working process
             if write_guard.expired() {
+                let mut scouting_guard = try!(self.scouting.write());
+                scouting_guard.insert(n);
+                drop(scouting_guard);
+
                 let candidate = try!(self.hive.new_candidate());
                 *write_guard = WorkingCandidate::new(candidate, self.hive.retries);
                 try!(self.consider_improvement(&write_guard.candidate));
+                drop(write_guard);
+
+                let mut scouting_guard = try!(self.scouting.write());
+                scouting_guard.remove(&n);
             }
         }
         Ok(())
     }
 
-    fn choose(&self, current_working: &[Candidate<S>]) -> usize {
+    fn choose(&self, current_working: &[Candidate<S>]) -> AbcResult<usize> {
         let fitnesses = (self.hive.scale)(current_working.iter()
                                                          .map(|candidate| candidate.fitness)
                                                          .collect::<Vec<f64>>());
 
+        // Avoid observing candidates that are being scouted.
+        let scouting_guard = try!(self.scouting.read());
         let running_totals = fitnesses.iter()
-                                      .scan(0f64, |total, fitness| {
+                                      .enumerate()
+                                      .filter(|&(ref i, _)| !scouting_guard.contains(i))
+                                      .scan(0f64, |total, (i, fitness)| {
                                           *total += *fitness;
-                                          Some(*total)
+                                          Some((i, *total))
                                       })
-                                      .collect::<Vec<f64>>();
+                                      .collect::<Vec<(usize, f64)>>();
+        drop(scouting_guard);
 
         // Multiplying the choice point is equivalent to, and more efficient than, normalizing
         // all of the scaled fitnesses and having a choice point in [0,1)
-        let total_fitness = running_totals.last().unwrap();
-        let choice_point = thread_rng().next_f64() * total_fitness;
-
-        for (i, total) in running_totals.iter().enumerate() {
-            if *total > choice_point {
-                return i;
+        match running_totals.last() {
+            Some(&(_, total_fitness)) => {
+                let choice_point = thread_rng().next_f64() * total_fitness;
+                for &(i, total) in running_totals.iter() {
+                    if total > choice_point {
+                        return Ok(i);
+                    }
+                }
+                unreachable!();
             }
+
+            // If we are currently scouting all of the solutions, pick one at random.
+            None => Ok(thread_rng().gen_range::<usize>(0, fitnesses.len()))
         }
-        unreachable!();
     }
 
     fn execute(&self, task: &Task) -> AbcResult<()> {
         let current_working = try!(self.current_working());
         let index = match *task {
             Task::Worker(n) => n,
-            Task::Observer(_) => self.choose(&current_working),
+            Task::Observer(_) => try!(self.choose(&current_working)),
         };
         self.work_on(&current_working, index)
     }
