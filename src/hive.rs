@@ -106,7 +106,12 @@ pub struct Hive<S: Solution> {
 
 impl<S: Solution> Hive<S> {
     fn new(hive: HiveBuilder<S>) -> AbcResult<Hive<S>> {
+        // Start by populating the field with an initial set of solution candidates.
+
+        // Feed the worker threads a total of N items, each signifying that
+        // we need another candidate.
         let tokens: Mutex<Range<usize>> = Mutex::new(0..hive.workers);
+
         let candidates = Mutex::new(Vec::with_capacity(hive.workers));
         let mut handles = Vec::<ScopedJoinHandle<AbcResult<()>>>::with_capacity(hive.threads);
 
@@ -121,12 +126,18 @@ impl<S: Solution> Hive<S> {
                 }));
             }
 
+            // Gather and return `Ok` iff all of the workers finished
+            // successfully, otherwise abort the construction.
             handles.drain(..)
                    .fold(Ok(()), |result, handle| result.and(handle.join()))
         }));
 
+        // We don't need the mutex anymore, since we're no longer populating
+        // the candidate set from multiple threads.
         let mut candidates = try!(candidates.into_inner());
 
+        // Find the current best candidate, since we want to cache the best
+        // at any given moment.
         let best = {
             let best_candidate = candidates.iter()
                                            .fold1(|best, next| {
@@ -140,9 +151,11 @@ impl<S: Solution> Hive<S> {
             Mutex::new(best_candidate.clone())
         };
 
+        // Wrap the candidates in a structure that will let the eventual
+        // thread swarm work on them.
         let working = candidates.drain(..)
                                 .map(|c| RwLock::new(WorkingCandidate::new(c, hive.retries)))
-                                .collect::<Vec<_>>();
+                                .collect::<Vec<RwLock<WorkingCandidate<S>>>>();
 
         Ok(Hive {
             hive: hive,
@@ -154,6 +167,12 @@ impl<S: Solution> Hive<S> {
         })
     }
 
+    /// Clone a snapshot of the current set of working candidates.
+    ///
+    /// The goal of this function is to hold a guard for each solution for as
+    /// little time as possible, so we can get out of the way of the other
+    /// threads. To this end, we clone the solutions, so that the thread can do
+    /// its work on a snapshot.
     fn current_working(&self) -> AbcResult<Vec<Candidate<S>>> {
         let mut current_working = Vec::with_capacity(self.working.len());
         for candidate_mutex in &self.working {
@@ -174,6 +193,7 @@ impl<S: Solution> Hive<S> {
         self.best.lock().map_err(AbcError::from)
     }
 
+    /// Perform greedy selection between a new candidate and the current best.
     fn consider_improvement(&self, candidate: &Candidate<S>) -> AbcResult<()> {
         let mut best_guard = try!(self.best.lock());
         if candidate.fitness > best_guard.fitness {
@@ -247,7 +267,7 @@ impl<S: Solution> Hive<S> {
             }
 
             // If we are currently scouting all of the solutions, pick one at random.
-            None => Ok(thread_rng().gen_range::<usize>(0, fitnesses.len()))
+            None => Ok(thread_rng().gen_range::<usize>(0, fitnesses.len())),
         }
     }
 
@@ -257,7 +277,9 @@ impl<S: Solution> Hive<S> {
             Task::Worker(n) => {
                 // If the worker's candidate is in the middle of being replaced, just skip it.
                 let scouting_guard = try!(self.scouting.read());
-                if scouting_guard.contains(&n) { return Ok(()) }
+                if scouting_guard.contains(&n) {
+                    return Ok(());
+                }
                 n
             }
             Task::Observer(_) => try!(self.choose(&current_working)),

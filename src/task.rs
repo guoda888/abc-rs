@@ -1,15 +1,21 @@
 #[derive(Clone, Debug, PartialEq, Eq)]
+/// Token indicating which abstract bee should do work next.
 pub enum Task {
     Worker(usize),
     Observer(usize), // The index is used for cycling, disregarded at execution.
 }
 
+/// Task iterator.
 pub struct TaskGenerator {
     workers: usize,
     observers: usize,
     next: Task,
     max_rounds: Option<usize>,
     stopped: bool,
+
+    /// Current round of execution. Starts at 0, then increments after yielding
+    /// the last task for each successive round. Since the algorithm staggers
+    /// the rounds, this will always be a relatively fuzzy measurement.
     pub round: usize,
 }
 
@@ -38,9 +44,13 @@ impl TaskGenerator {
 
 impl Iterator for TaskGenerator {
     type Item = Task;
+
     fn next(&mut self) -> Option<Self::Item> {
         if !self.stopped {
+            // The task in the TaskGenerator's state is always the one to be
+            // popped from the queue.
             let current = self.next.clone();
+
             self.next = match self.next {
                 Task::Worker(n) if n == self.workers - 1 => {
                     if self.observers > 0 {
@@ -51,6 +61,7 @@ impl Iterator for TaskGenerator {
                 }
                 Task::Worker(n) => Task::Worker(n + 1),
                 Task::Observer(n) if n == self.observers - 1 => {
+                    // After this task, we need to start the next round.
                     self.round += 1;
                     if let Some(n) = self.max_rounds {
                         if self.round >= n {
