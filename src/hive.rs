@@ -312,9 +312,12 @@ impl<S: Solution> Hive<S> {
     /// Returns the current round of a running hive.
     ///
     /// If a worker thread has panicked and poisoned the task generator lock,
-    /// `get_round` will return `Err(abc::Error)`.
+    /// `get_round` will return `Err(abc::Error)`. If the hive has not been
+    /// run, `get_round` will return `Ok(None)`.
     ///
-    /// If the hive has not been run, `get_round` will return `Ok(None)`.
+    /// If the hive is running, this will return `Ok(Some(n))`. `n` will start
+    /// at 0, and increment each time every task in the round has been claimed
+    /// (though not necessarily completed) by a worker thread.
     pub fn get_round(&self) -> AbcResult<Option<usize>> {
         let tasks_guard = try!(self.tasks.lock());
         Ok(tasks_guard.as_ref().map(|tasks| tasks.round))
