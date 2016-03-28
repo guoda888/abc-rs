@@ -16,26 +16,26 @@ use std::collections::BTreeSet;
 
 use task::{TaskGenerator, Task};
 use candidate::{WorkingCandidate, Candidate};
-use solution::Solution;
+use context::Context;
 use scaling::{ScalingFunction, proportionate};
 use result::{Result as AbcResult, Error as AbcError};
 
 /// Manages the parameters of the ABC algorithm.
-pub struct HiveBuilder<S: Solution> {
+pub struct HiveBuilder<Ctx: Context> {
     workers: usize,
     observers: usize,
     retries: usize,
-    builder: Mutex<S::Builder>,
+    context: Ctx,
     threads: usize,
     scale: Box<ScalingFunction>,
 }
 
-impl<S: Solution> HiveBuilder<S> {
+impl<Ctx: Context> HiveBuilder<Ctx> {
     /// Creates a new hive.
     ///
-    /// * `builder` - Factory-like state that can be used while generating solutions.
+    /// * `context` - Factory-like state that can be used while generating solutions.
     /// * `workers` - Number of working solution candidates to maintain at a time.
-    pub fn new(builder: S::Builder, workers: usize) -> HiveBuilder<S> {
+    pub fn new(context: Ctx, workers: usize) -> HiveBuilder<Ctx> {
         if workers == 0 {
             panic!("HiveBuilder must have at least one worker.");
         }
@@ -45,7 +45,7 @@ impl<S: Solution> HiveBuilder<S> {
             observers: workers,
             retries: workers,
 
-            builder: Mutex::new(builder),
+            context: context,
             threads: num_cpus::get(),
             scale: proportionate(),
         }
@@ -54,7 +54,7 @@ impl<S: Solution> HiveBuilder<S> {
     /// Sets the number of "bees" that will pick a candidate to work on at random.
     ///
     /// This defaults to the number of workers.
-    pub fn set_observers(mut self, observers: usize) -> HiveBuilder<S> {
+    pub fn set_observers(mut self, observers: usize) -> HiveBuilder<Ctx> {
         self.observers = observers;
         self
     }
@@ -62,50 +62,49 @@ impl<S: Solution> HiveBuilder<S> {
     /// Sets the number of times a candidate can go unimproved before being reinitialized.
     ///
     /// This defaults to the number of workers.
-    pub fn set_retries(mut self, retries: usize) -> HiveBuilder<S> {
+    pub fn set_retries(mut self, retries: usize) -> HiveBuilder<Ctx> {
         self.retries = retries;
         self
     }
 
     /// Sets the number of worker threads to use while running.
-    pub fn set_threads(mut self, threads: usize) -> HiveBuilder<S> {
+    pub fn set_threads(mut self, threads: usize) -> HiveBuilder<Ctx> {
         self.threads = threads;
         self
     }
 
     /// Sets the scaling function for observers to use.
-    pub fn set_scaling(mut self, scale: Box<ScalingFunction>) -> HiveBuilder<S> {
+    pub fn set_scaling(mut self, scale: Box<ScalingFunction>) -> HiveBuilder<Ctx> {
         self.scale = scale;
         self
     }
 
     /// Activates the `HiveBuilder` to create a runnable object.
-    pub fn build(self) -> AbcResult<Hive<S>> {
+    pub fn build(self) -> AbcResult<Hive<Ctx>> {
         Hive::new(self)
     }
 
-    fn new_candidate(&self) -> AbcResult<Candidate<S>> {
-        let mut builder = try!(self.builder.lock());
-        let solution = S::make(&mut builder);
-        drop(builder);
-        Ok(Candidate::new(solution))
+    fn new_candidate(&self) -> Candidate<Ctx::Solution> {
+        let solution = self.context.make();
+        let fitness = self.context.evaluate_fitness(&solution);
+        Candidate::new(solution, fitness)
     }
 }
 
 /// Runs the ABC algorithm, maintaining any necessary state.
-pub struct Hive<S: Solution> {
-    hive: HiveBuilder<S>,
+pub struct Hive<Ctx: Context> {
+    hive: HiveBuilder<Ctx>,
 
-    working: Vec<RwLock<WorkingCandidate<S>>>,
-    best: Mutex<Candidate<S>>,
+    working: Vec<RwLock<WorkingCandidate<Ctx::Solution>>>,
+    best: Mutex<Candidate<Ctx::Solution>>,
     scouting: RwLock<BTreeSet<usize>>,
 
     tasks: Mutex<Option<TaskGenerator>>,
-    streaming: Option<Mutex<Sender<Candidate<S>>>>,
+    streaming: Option<Mutex<Sender<Candidate<Ctx::Solution>>>>,
 }
 
-impl<S: Solution> Hive<S> {
-    fn new(hive: HiveBuilder<S>) -> AbcResult<Hive<S>> {
+impl<Ctx: Context> Hive<Ctx> {
+    fn new(hive: HiveBuilder<Ctx>) -> AbcResult<Hive<Ctx>> {
         // Start by populating the field with an initial set of solution candidates.
 
         // Feed the worker threads a total of N items, each signifying that
@@ -119,7 +118,7 @@ impl<S: Solution> Hive<S> {
             for _ in 0..hive.threads {
                 handles.push(scope.spawn(|| {
                     while let Some(_) = tokens.lock().unwrap().next() {
-                        let candidate = try!(hive.new_candidate());
+                        let candidate = hive.new_candidate();
                         try!(candidates.lock()).push(candidate);
                     }
                     Ok(())
@@ -155,7 +154,7 @@ impl<S: Solution> Hive<S> {
         // thread swarm work on them.
         let working = candidates.drain(..)
                                 .map(|c| RwLock::new(WorkingCandidate::new(c, hive.retries)))
-                                .collect::<Vec<RwLock<WorkingCandidate<S>>>>();
+                                .collect::<Vec<RwLock<WorkingCandidate<Ctx::Solution>>>>();
 
         Ok(Hive {
             hive: hive,
@@ -173,7 +172,7 @@ impl<S: Solution> Hive<S> {
     /// little time as possible, so we can get out of the way of the other
     /// threads. To this end, we clone the solutions, so that the thread can do
     /// its work on a snapshot.
-    fn current_working(&self) -> AbcResult<Vec<Candidate<S>>> {
+    fn current_working(&self) -> AbcResult<Vec<Candidate<Ctx::Solution>>> {
         let mut current_working = Vec::with_capacity(self.working.len());
         for candidate_mutex in &self.working {
             let read_guard = try!(candidate_mutex.read());
@@ -189,12 +188,12 @@ impl<S: Solution> Hive<S> {
     /// on the availability of the associated mutex. If you plan on performing
     /// expensive computations, you should `drop` the guard as soon as
     /// possible, or acquire and clone it within a small block.
-    pub fn get(&self) -> AbcResult<MutexGuard<Candidate<S>>> {
+    pub fn get(&self) -> AbcResult<MutexGuard<Candidate<Ctx::Solution>>> {
         self.best.lock().map_err(AbcError::from)
     }
 
     /// Perform greedy selection between a new candidate and the current best.
-    fn consider_improvement(&self, candidate: &Candidate<S>) -> AbcResult<()> {
+    fn consider_improvement(&self, candidate: &Candidate<Ctx::Solution>) -> AbcResult<()> {
         let mut best_guard = try!(self.best.lock());
         if candidate.fitness > best_guard.fitness {
             *best_guard = candidate.clone();
@@ -210,8 +209,10 @@ impl<S: Solution> Hive<S> {
         Ok(())
     }
 
-    fn work_on(&self, current_working: &[Candidate<S>], n: usize) -> AbcResult<()> {
-        let variant = Candidate::new(S::explore(current_working, n));
+    fn work_on(&self, current_working: &[Candidate<Ctx::Solution>], n: usize) -> AbcResult<()> {
+        let variant_solution = self.hive.context.explore(current_working, n);
+        let variant_fitness = self.hive.context.evaluate_fitness(&variant_solution);
+        let variant = Candidate::new(variant_solution, variant_fitness);
         let mut write_guard = try!(self.working[n].write());
         if variant.fitness > write_guard.candidate.fitness {
             *write_guard = WorkingCandidate::new(variant, self.hive.retries);
@@ -224,7 +225,7 @@ impl<S: Solution> Hive<S> {
                 scouting_guard.insert(n);
                 drop(scouting_guard);
 
-                let candidate = try!(self.hive.new_candidate());
+                let candidate = self.hive.new_candidate();
                 *write_guard = WorkingCandidate::new(candidate, self.hive.retries);
                 try!(self.consider_improvement(&write_guard.candidate));
                 drop(write_guard);
@@ -236,7 +237,7 @@ impl<S: Solution> Hive<S> {
         Ok(())
     }
 
-    fn choose(&self, current_working: &[Candidate<S>]) -> AbcResult<usize> {
+    fn choose(&self, current_working: &[Candidate<Ctx::Solution>]) -> AbcResult<usize> {
         let fitnesses = (self.hive.scale)(current_working.iter()
                                                          .map(|candidate| candidate.fitness)
                                                          .collect::<Vec<f64>>());
@@ -328,7 +329,7 @@ impl<S: Solution> Hive<S> {
     ///
     /// If one of the worker threads panics while working, this will return
     /// `Err(abc::Error)`. Otherwise, it will return `Ok` with a `Candidate`.
-    pub fn run_for_rounds(&self, rounds: usize) -> AbcResult<Candidate<S>> {
+    pub fn run_for_rounds(&self, rounds: usize) -> AbcResult<Candidate<Ctx::Solution>> {
         let tasks = TaskGenerator::new(self.hive.workers, self.hive.observers).max_rounds(rounds);
         try!(self.run(tasks));
         self.get().map(|guard| guard.clone())
@@ -339,7 +340,7 @@ impl<S: Solution> Hive<S> {
     /// This method consumes the hive, which will run until the `HiveBuilder` object
     /// is dropped. It returns an `mpsc::Receiver`, which receives a
     /// `Candidate` each time the hive improves on its best solution.
-    pub fn stream(mut self) -> Receiver<Candidate<S>> {
+    pub fn stream(mut self) -> Receiver<Candidate<Ctx::Solution>> {
         let (sender, receiver) = channel();
         spawn(move || {
             let tasks = TaskGenerator::new(self.hive.workers, self.hive.observers);
@@ -372,7 +373,8 @@ impl<S: Solution> Hive<S> {
     }
 }
 
-impl<S: Solution + Debug> Debug for Hive<S> {
+impl<Ctx: Context> Debug for Hive<Ctx>
+        where Ctx::Solution: Debug {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         for mutex in (&self.working).iter() {
             let working = mutex.read().unwrap();
@@ -383,7 +385,7 @@ impl<S: Solution + Debug> Debug for Hive<S> {
     }
 }
 
-impl<S: Solution> Drop for Hive<S> {
+impl<Ctx: Context> Drop for Hive<Ctx> {
     fn drop(&mut self) {
         self.stop().unwrap_or(())
     }

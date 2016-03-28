@@ -1,40 +1,35 @@
 extern crate abc;
 extern crate rand;
 
-use rand::Rng;
+use rand::{Rng, thread_rng};
 
-use abc::{Solution, Candidate, HiveBuilder, scaling};
+use abc::{Context, Candidate, HiveBuilder, scaling};
 
 #[derive(Clone, Debug)]
-struct Foo(i32);
+struct Foo;
 
-impl Solution for Foo {
-    type Builder = ();
+impl Context for Foo {
+    type Solution = i32;
 
-    fn make(_: &mut ()) -> Foo {
-        let mut rng = rand::thread_rng();
-        let x = rng.gen_range(0, 100);
-        Foo(x)
+    fn make(&self) -> i32 {
+        thread_rng().gen_range(0, 100)
     }
 
-    fn evaluate_fitness(&self) -> f64 {
+    fn evaluate_fitness(&self, solution: &Self::Solution) -> f64 {
         let mut x = 0;
         for _ in 0..1_000 {
             x += 1;
         }
-        let Foo(y) = *self;
-        (x - x) as f64 + y as f64
+        (x - x) as f64 + *solution as f64
     }
 
-    fn explore(field: &[Candidate<Foo>], n: usize) -> Foo {
-        let mut rng = rand::thread_rng();
-        let Foo(x) = field[n].solution;
-        Foo(x + rng.gen_range(-10, 10))
+    fn explore(&self, field: &[Candidate<i32>], n: usize) -> i32 {
+        field[n].solution + thread_rng().gen_range(-10, 10)
     }
 }
 
 fn main() {
-    let hive = HiveBuilder::<Foo>::new((), 5)
+    let hive = HiveBuilder::<Foo>::new(Foo, 5)
         .set_threads(5)
         .set_scaling(scaling::power_rank(10_f64));
     println!("{:?}", hive.build().unwrap().run_for_rounds(1_000));

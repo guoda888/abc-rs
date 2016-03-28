@@ -1,7 +1,5 @@
 use std::fmt::{Debug, Formatter, Result as FmtResult};
 
-use solution::Solution;
-
 #[derive(Clone)]
 /// One solution being explored by the hive, plus additional data.
 ///
@@ -9,7 +7,7 @@ use solution::Solution;
 /// [`evaluate_fitness`](trait.Solution.html#tymethod.evaluate_fitness)
 /// method may be very expensive, so the `Candidate` struct caches the
 /// computed fitness of its solution.
-pub struct Candidate<S: Solution> {
+pub struct Candidate<S: Clone + Send + Sync + 'static> {
     /// Actual candidate solution.
     pub solution: S,
 
@@ -17,28 +15,28 @@ pub struct Candidate<S: Solution> {
     pub fitness: f64,
 }
 
-impl<S: Solution> Candidate<S> {
+impl<S: Clone + Send + Sync + 'static> Candidate<S> {
     /// Wrap a solution with its cached fitness.
-    pub fn new(solution: S) -> Candidate<S> {
+    pub fn new(solution: S, fitness: f64) -> Candidate<S> {
         Candidate {
-            fitness: solution.evaluate_fitness(),
             solution: solution,
+            fitness: fitness,
         }
     }
 }
 
-impl<S: Solution + Debug> Debug for Candidate<S> {
+impl<S: Clone + Send + Sync + 'static> Debug for Candidate<S> where S: Debug {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         write!(f, "[{}] {:?}", self.fitness, self.solution)
     }
 }
 
-pub struct WorkingCandidate<S: Solution> {
+pub struct WorkingCandidate<S: Clone + Send + Sync + 'static> {
     pub candidate: Candidate<S>,
     retries: i32,
 }
 
-impl<S: Solution> WorkingCandidate<S> {
+impl<S: Clone + Send + Sync + 'static> WorkingCandidate<S> {
     pub fn new(candidate: Candidate<S>, retries: usize) -> WorkingCandidate<S> {
         WorkingCandidate {
             candidate: candidate,
@@ -54,3 +52,4 @@ impl<S: Solution> WorkingCandidate<S> {
         self.retries -= 1;
     }
 }
+

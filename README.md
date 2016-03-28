@@ -37,7 +37,7 @@ the algorithm are:
 
 A solution could be a game-playing AI, a blueprint for a building, or
 just a point in space, and the `abc` crate treats them all alike. Simply
-implement the [`Solution`](https://daviddonna.github.io/abc-rs/abc/trait.Solution.html)
+implement the [`Context`](https://daviddonna.github.io/abc-rs/abc/trait.Context.html)
 trait for a type of your choice, construct a `Hive`, and start running.
 
 ### Synchronous and Asynchronous Running
