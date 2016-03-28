@@ -25,7 +25,9 @@ impl<S: Clone + Send + Sync + 'static> Candidate<S> {
     }
 }
 
-impl<S: Clone + Send + Sync + 'static> Debug for Candidate<S> where S: Debug {
+impl<S: Clone + Send + Sync + 'static> Debug for Candidate<S>
+    where S: Debug
+{
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         write!(f, "[{}] {:?}", self.fitness, self.solution)
     }
@@ -52,4 +54,3 @@ impl<S: Clone + Send + Sync + 'static> WorkingCandidate<S> {
         self.retries -= 1;
     }
 }
-

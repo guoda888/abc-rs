@@ -374,7 +374,8 @@ impl<Ctx: Context> Hive<Ctx> {
 }
 
 impl<Ctx: Context> Debug for Hive<Ctx>
-        where Ctx::Solution: Debug {
+    where Ctx::Solution: Debug
+{
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         for mutex in (&self.working).iter() {
             let working = mutex.read().unwrap();
