@@ -1,3 +1,8 @@
+0.2.0 / 2016/03/27
+==================
+
+  * switch to context-oriented interface for complicated problems
+
 0.1.2 / 2016/03/25
 ==================
 
