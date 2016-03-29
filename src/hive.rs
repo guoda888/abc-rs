@@ -100,7 +100,7 @@ pub struct Hive<Ctx: Context> {
     scouting: RwLock<BTreeSet<usize>>,
 
     tasks: Mutex<Option<TaskGenerator>>,
-    streaming: Option<Mutex<Sender<Candidate<Ctx::Solution>>>>,
+    sender: Option<Mutex<Sender<Candidate<Ctx::Solution>>>>,
 }
 
 impl<Ctx: Context> Hive<Ctx> {
@@ -162,7 +162,7 @@ impl<Ctx: Context> Hive<Ctx> {
             best: best,
             scouting: RwLock::new(BTreeSet::new()),
             tasks: Mutex::new(None),
-            streaming: None,
+            sender: None,
         })
     }
 
@@ -197,7 +197,7 @@ impl<Ctx: Context> Hive<Ctx> {
         let mut best_guard = try!(self.best.lock());
         if candidate.fitness > best_guard.fitness {
             *best_guard = candidate.clone();
-            if let Some(mutex) = self.streaming.as_ref() {
+            if let Some(mutex) = self.sender.as_ref() {
                 // We're streaming, so we need to post the improved candidate.
                 let sender_guard = try!(mutex.lock());
                 // If this errors, the receiver was dropped, so we're done.
@@ -335,19 +335,13 @@ impl<Ctx: Context> Hive<Ctx> {
         self.get().map(|guard| guard.clone())
     }
 
-    /// Runs indefinitely in the background, providing a stream of results.
+    /// Run indefinitely.
     ///
-    /// This method consumes the hive, which will run until the `HiveBuilder` object
-    /// is dropped. It returns an `mpsc::Receiver`, which receives a
-    /// `Candidate` each time the hive improves on its best solution.
-    pub fn stream(mut self) -> Receiver<Candidate<Ctx::Solution>> {
-        let (sender, receiver) = channel();
-        spawn(move || {
-            let tasks = TaskGenerator::new(self.hive.workers, self.hive.observers);
-            self.streaming = Some(Mutex::new(sender));
-            self.run(tasks)
-        });
-        receiver
+    /// If one of the worker threads panics while working, this will return
+    /// `Err(abc::Error)`. Otherwise, it will return `Ok(())`.
+    pub fn run_forever(&self) -> AbcResult<()> {
+        let tasks = TaskGenerator::new(self.hive.workers, self.hive.observers);
+        self.run(tasks)
     }
 
     /// Stops a running hive.
@@ -356,6 +350,14 @@ impl<Ctx: Context> Hive<Ctx> {
     pub fn stop(&self) -> AbcResult<()> {
         let mut tasks_guard = try!(self.tasks.lock());
         Ok(tasks_guard.as_mut().map_or((), |t| t.stop()))
+    }
+
+    /// Each new best candidate will be sent to `sender`.
+    ///
+    /// This is kept in a separate function so that the hive can be borrowed
+    /// while running.
+    pub fn set_sender(&mut self, sender: Sender<Candidate<Ctx::Solution>>) {
+        self.sender = Some(Mutex::new(sender));
     }
 
     /// Returns the current round of a running hive.
@@ -370,6 +372,28 @@ impl<Ctx: Context> Hive<Ctx> {
     pub fn get_round(&self) -> AbcResult<Option<usize>> {
         let tasks_guard = try!(self.tasks.lock());
         Ok(tasks_guard.as_ref().map(|tasks| tasks.round))
+    }
+
+    /// Get a reference to the hive's context.
+    pub fn context(&self) -> &Ctx {
+        &self.hive.context
+    }
+}
+
+impl<Ctx: Context + 'static> Hive<Ctx> {
+    /// Runs indefinitely in the background, providing a stream of results.
+    ///
+    /// This method consumes the hive, which will run until the `HiveBuilder`
+    /// object is dropped. It returns an `mpsc::Receiver`, which receives a
+    /// `Candidate` each time the hive improves on its best solution.
+    pub fn stream(mut self) -> Receiver<Candidate<Ctx::Solution>> {
+        let (sender, receiver) = channel();
+        spawn(move || {
+            self.set_sender(sender);
+            let tasks = TaskGenerator::new(self.hive.workers, self.hive.observers);
+            self.run(tasks)
+        });
+        receiver
     }
 }
 

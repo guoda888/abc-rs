@@ -48,7 +48,7 @@ use candidate::Candidate;
 /// }
 /// # }
 /// ```
-pub trait Context : Send + Sync + 'static {
+pub trait Context : Send + Sync {
 
     /// Type of solutions generated and evaluated by the ABC.
     ///
