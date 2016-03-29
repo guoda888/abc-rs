@@ -1,3 +1,9 @@
+0.2.1 / 2016/03/27
+==================
+
+  * remove a priori requirement for Context to be 'static
+  * add context(), set_sender(Sender), and run_forever() methods to Hive
+
 0.2.0 / 2016/03/27
 ==================
 
