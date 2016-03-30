@@ -117,7 +117,10 @@ impl<Ctx: Context> Hive<Ctx> {
         try!(crossbeam::scope(|scope| {
             for _ in 0..hive.threads {
                 handles.push(scope.spawn(|| {
-                    while let Some(_) = tokens.lock().unwrap().next() {
+                    while let Some(_) = {
+                        let mut guard = tokens.lock().unwrap();
+                        guard.next()
+                    } {
                         let candidate = hive.new_candidate();
                         try!(candidates.lock()).push(candidate);
                     }
