@@ -1,3 +1,10 @@
+0.2.2 / 2016/03/31
+==================
+
+  * fix bug that caused hive initialization to run one candidate at a time
+  * fix bug that caused all new candidates to block while scouting
+  * send best solution immediately when setting a sender on a Hive
+
 0.2.1 / 2016/03/27
 ==================
 
