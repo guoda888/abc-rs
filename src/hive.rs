@@ -361,11 +361,11 @@ impl<Ctx: Context> Hive<Ctx> {
     ///
     /// This is kept in a separate function so that the hive can be borrowed
     /// while running.
-    pub fn set_sender(&mut self, sender: Sender<Candidate<Ctx::Solution>>) -> AbcResult<()> {
-        let best_guard = try!(self.best.lock());
-        sender.send(best_guard.clone()).unwrap_or(());
+    pub fn set_sender(&mut self, sender: Sender<Candidate<Ctx::Solution>>) {
+        if let Ok(best_guard) = self.best.lock() {
+            sender.send(best_guard.clone()).unwrap_or(());
+        }
         self.sender = Some(Mutex::new(sender));
-        Ok(())
     }
 
     /// Returns the current round of a running hive.
@@ -397,7 +397,7 @@ impl<Ctx: Context + 'static> Hive<Ctx> {
     pub fn stream(mut self) -> Receiver<Candidate<Ctx::Solution>> {
         let (sender, receiver) = channel();
         spawn(move || {
-            self.set_sender(sender).expect("Failed to set background sender");
+            self.set_sender(sender);
             let tasks = TaskGenerator::new(self.hive.workers, self.hive.observers);
             self.run(tasks)
         });
