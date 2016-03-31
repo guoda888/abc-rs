@@ -113,7 +113,9 @@
 //!     // on the best candidate so far.
 //!     let mut current_best_fitness = best_after_20.fitness;
 //!     for new_best in hive.stream().iter().take(3) {
-//!         assert!(new_best.fitness > current_best_fitness);
+//!         // The iterator will start with the best result so far; after that,
+//!         // each new candidate will be an improvement.
+//!         assert!(new_best.fitness >= current_best_fitness);
 //!         current_best_fitness = new_best.fitness;
 //!     }
 //! }
