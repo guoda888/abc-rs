@@ -227,8 +227,10 @@ impl<Ctx: Context> Hive<Ctx> {
                 let mut scouting_guard = try!(self.scouting.write());
                 scouting_guard.insert(n);
                 drop(scouting_guard);
+                drop(write_guard);
 
                 let candidate = self.hive.new_candidate();
+                let mut write_guard = try!(self.working[n].write());
                 *write_guard = WorkingCandidate::new(candidate, self.hive.retries);
                 try!(self.consider_improvement(&write_guard.candidate));
                 drop(write_guard);
