@@ -46,7 +46,9 @@ impl Iterator for TaskGenerator {
     type Item = Task;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.stopped {
+        if self.stopped {
+            None
+        } else {
             // The task in the TaskGenerator's state is always the one to be
             // popped from the queue.
             let current = self.next.clone();
@@ -73,8 +75,6 @@ impl Iterator for TaskGenerator {
                 Task::Observer(n) => Task::Observer(n + 1),
             };
             Some(current)
-        } else {
-            None
         }
     }
 }

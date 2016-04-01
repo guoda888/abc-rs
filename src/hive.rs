@@ -264,7 +264,7 @@ impl<Ctx: Context> Hive<Ctx> {
         match running_totals.last() {
             Some(&(_, total_fitness)) => {
                 let choice_point = thread_rng().next_f64() * total_fitness;
-                for &(i, total) in running_totals.iter() {
+                for &(i, total) in &running_totals {
                     if total > choice_point {
                         return Ok(i);
                     }

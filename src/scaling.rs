@@ -48,8 +48,8 @@ pub fn proportionate() -> Box<ScalingFunction> {
 /// scaled<sub>*i*</sub> = fitness<sub>*i*</sub><sup>*k*</sup>
 pub fn power(k: f64) -> Box<ScalingFunction> {
     Box::new(move |mut fitnesses: Vec<f64>| {
-        for i in 0..fitnesses.len() {
-            fitnesses[i] = fitnesses[i].powf(k);
+        for f in &mut fitnesses {
+            *f = f.powf(k);
         }
         fitnesses
     })
