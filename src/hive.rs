@@ -222,16 +222,18 @@ impl<Ctx: Context> Hive<Ctx> {
             write_guard.deplete();
             // Scouting has been folded into the working process
             if write_guard.expired() {
-                let mut scouting_guard = try!(self.scouting.write());
-                scouting_guard.insert(n);
-                drop(scouting_guard);
+                {
+                    let mut scouting_guard = try!(self.scouting.write());
+                    scouting_guard.insert(n);
+                }
                 drop(write_guard);
 
                 let candidate = self.hive.new_candidate();
-                let mut write_guard = try!(self.working[n].write());
-                *write_guard = WorkingCandidate::new(candidate, self.hive.retries);
-                try!(self.consider_improvement(&write_guard.candidate));
-                drop(write_guard);
+                try!(self.consider_improvement(&candidate));
+                {
+                    let mut write_guard = try!(self.working[n].write());
+                    *write_guard = WorkingCandidate::new(candidate, self.hive.retries);
+                }
 
                 let mut scouting_guard = try!(self.scouting.write());
                 scouting_guard.remove(&n);
@@ -246,16 +248,17 @@ impl<Ctx: Context> Hive<Ctx> {
                                                          .collect::<Vec<f64>>());
 
         // Avoid observing candidates that are being scouted.
-        let scouting_guard = try!(self.scouting.read());
-        let running_totals = fitnesses.iter()
-                                      .enumerate()
-                                      .filter(|&(ref i, _)| !scouting_guard.contains(i))
-                                      .scan(0f64, |total, (i, fitness)| {
-                                          *total += *fitness;
-                                          Some((i, *total))
-                                      })
-                                      .collect::<Vec<(usize, f64)>>();
-        drop(scouting_guard);
+        let running_totals = {
+            let scouting_guard = try!(self.scouting.read());
+            fitnesses.iter()
+                     .enumerate()
+                     .filter(|&(ref i, _)| !scouting_guard.contains(i))
+                     .scan(0f64, |total, (i, fitness)| {
+                         *total += *fitness;
+                         Some((i, *total))
+                     })
+                     .collect::<Vec<(usize, f64)>>()
+        };
 
         // Multiplying the choice point is equivalent to, and more efficient than, normalizing
         // all of the scaled fitnesses and having a choice point in [0,1)
@@ -292,9 +295,10 @@ impl<Ctx: Context> Hive<Ctx> {
     }
 
     fn run(&self, tasks: TaskGenerator) -> AbcResult<()> {
-        let mut guard = try!(self.tasks.lock());
-        *guard = Some(tasks);
-        drop(guard);
+        {
+            let mut guard = try!(self.tasks.lock());
+            *guard = Some(tasks);
+        }
 
         let mut handles: Vec<ScopedJoinHandle<AbcResult<()>>> = Vec::new();
 
@@ -302,9 +306,10 @@ impl<Ctx: Context> Hive<Ctx> {
             for _ in 0..self.hive.threads {
                 handles.push(scope.spawn(|| {
                     loop {
-                        let mut guard = try!(self.tasks.lock());
-                        let task = guard.as_mut().and_then(|gen| gen.next());
-                        drop(guard);
+                        let task = {
+                            let mut guard = try!(self.tasks.lock());
+                            guard.as_mut().and_then(|gen| gen.next())
+                        };
 
                         match task {
                             Some(t) => try!(self.execute(&t)),
