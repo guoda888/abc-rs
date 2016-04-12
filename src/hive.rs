@@ -1,10 +1,8 @@
 extern crate num_cpus;
-extern crate itertools;
 extern crate rand;
 extern crate crossbeam;
 
 use self::rand::{thread_rng, Rng};
-use self::itertools::Itertools;
 use self::crossbeam::{scope, ScopedJoinHandle};
 
 use std::ops::Range;
@@ -141,15 +139,15 @@ impl<Ctx: Context> Hive<Ctx> {
         // Find the current best candidate, since we want to cache the best
         // at any given moment.
         let best = {
-            let best_candidate = candidates.iter()
-                                           .fold1(|best, next| {
-                                               if next.fitness > best.fitness {
-                                                   next
-                                               } else {
-                                                   best
-                                               }
-                                           })
-                                           .unwrap();
+            let (first, rest) = candidates.split_first().unwrap();
+            let best_candidate = rest.iter()
+                                     .fold(first, |best, next| {
+                                         if next.fitness > best.fitness {
+                                             next
+                                         } else {
+                                             best
+                                         }
+                                     });
             Mutex::new(best_candidate.clone())
         };
 
