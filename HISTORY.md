@@ -1,3 +1,10 @@
+0.2.3 / 2016/05/02
+==================
+
+  * remove itertools dependency by reimplementing fold1
+  * drop row lock before checking whether newly scouted solution is the best so far
+  * minor refactoring to implement clippy recommendations
+
 0.2.2 / 2016/03/31
 ==================
 
