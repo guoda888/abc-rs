@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Error","Unifies the errors thrown by a hive's operation."]],"type":[["Result","Encodes the possibility of a thread panicking and corruping a mutex."]]});

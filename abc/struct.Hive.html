@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Hive` struct in crate `abc`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Hive">
+
+    <title>abc::Hive - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='index.html'>abc</a></p><script>window.sidebarCurrent = {name: 'Hive', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='index.html'>abc</a>::<wbr><a class='struct' href=''>Hive</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a id='src-206' class='srclink' href='../src/abc/src/hive.rs.html#93-102' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Hive&lt;Ctx: <a class='trait' href='../abc/trait.Context.html' title='abc::Context'>Context</a>&gt; {
+    // some fields omitted
+}</pre><div class='docblock'><p>Runs the ABC algorithm, maintaining any necessary state.</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl&lt;Ctx: <a class='trait' href='../abc/trait.Context.html' title='abc::Context'>Context</a>&gt; <a class='struct' href='../abc/struct.Hive.html' title='abc::Hive'>Hive</a>&lt;Ctx&gt;</code></h3><div class='impl-items'><h4 id='method.get' class='method'><code>fn <a href='#method.get' class='fnname'>get</a>(&amp;self) -&gt; <a class='type' href='../abc/type.Result.html' title='abc::Result'>AbcResult</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/std/sync/mutex/struct.MutexGuard.html' title='std::sync::mutex::MutexGuard'>MutexGuard</a>&lt;<a class='struct' href='../abc/struct.Candidate.html' title='abc::Candidate'>Candidate</a>&lt;Ctx::Solution&gt;&gt;&gt;</code></h4>
+<div class='docblock'><p>Returns a guard for the current best solution found by the hive.</p>
+
+<p>If the hive is running, you should drop the guard returned by this
+function as soon as convenient, since the logic of the hive can block
+on the availability of the associated mutex. If you plan on performing
+expensive computations, you should <code>drop</code> the guard as soon as
+possible, or acquire and clone it within a small block.</p>
+</div><h4 id='method.run_for_rounds' class='method'><code>fn <a href='#method.run_for_rounds' class='fnname'>run_for_rounds</a>(&amp;self, rounds: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a class='type' href='../abc/type.Result.html' title='abc::Result'>AbcResult</a>&lt;<a class='struct' href='../abc/struct.Candidate.html' title='abc::Candidate'>Candidate</a>&lt;Ctx::Solution&gt;&gt;</code></h4>
+<div class='docblock'><p>Runs for a fixed number of rounds, then return the best solution found.</p>
+
+<p>If one of the worker threads panics while working, this will return
+<code>Err(abc::Error)</code>. Otherwise, it will return <code>Ok</code> with a <code>Candidate</code>.</p>
+</div><h4 id='method.run_forever' class='method'><code>fn <a href='#method.run_forever' class='fnname'>run_forever</a>(&amp;self) -&gt; <a class='type' href='../abc/type.Result.html' title='abc::Result'>AbcResult</a>&lt;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>&gt;</code></h4>
+<div class='docblock'><p>Run indefinitely.</p>
+
+<p>If one of the worker threads panics while working, this will return
+<code>Err(abc::Error)</code>. Otherwise, it will return <code>Ok(())</code>.</p>
+</div><h4 id='method.stop' class='method'><code>fn <a href='#method.stop' class='fnname'>stop</a>(&amp;self) -&gt; <a class='type' href='../abc/type.Result.html' title='abc::Result'>AbcResult</a>&lt;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>&gt;</code></h4>
+<div class='docblock'><p>Stops a running hive.</p>
+
+<p>If a worker thread has panicked, this returns <code>Err(abc::Error)</code>.</p>
+</div><h4 id='method.set_sender' class='method'><code>fn <a href='#method.set_sender' class='fnname'>set_sender</a>(&amp;mut self, sender: <a class='struct' href='https://doc.rust-lang.org/nightly/std/sync/mpsc/struct.Sender.html' title='std::sync::mpsc::Sender'>Sender</a>&lt;<a class='struct' href='../abc/struct.Candidate.html' title='abc::Candidate'>Candidate</a>&lt;Ctx::Solution&gt;&gt;)</code></h4>
+<div class='docblock'><p>Each new best candidate will be sent to <code>sender</code>.</p>
+
+<p>This is kept in a separate function so that the hive can be borrowed
+while running.</p>
+</div><h4 id='method.get_round' class='method'><code>fn <a href='#method.get_round' class='fnname'>get_round</a>(&amp;self) -&gt; <a class='type' href='../abc/type.Result.html' title='abc::Result'>AbcResult</a>&lt;<a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>&gt;&gt;</code></h4>
+<div class='docblock'><p>Returns the current round of a running hive.</p>
+
+<p>If a worker thread has panicked and poisoned the task generator lock,
+<code>get_round</code> will return <code>Err(abc::Error)</code>. If the hive has not been
+run, <code>get_round</code> will return <code>Ok(None)</code>.</p>
+
+<p>If the hive is running, this will return <code>Ok(Some(n))</code>. <code>n</code> will start
+at 0, and increment each time every task in the round has been claimed
+(though not necessarily completed) by a worker thread.</p>
+</div><h4 id='method.context' class='method'><code>fn <a href='#method.context' class='fnname'>context</a>(&amp;self) -&gt; &amp;Ctx</code></h4>
+<div class='docblock'><p>Get a reference to the hive&#39;s context.</p>
+</div></div><h3 class='impl'><code>impl&lt;Ctx: <a class='trait' href='../abc/trait.Context.html' title='abc::Context'>Context</a> + 'static&gt; <a class='struct' href='../abc/struct.Hive.html' title='abc::Hive'>Hive</a>&lt;Ctx&gt;</code></h3><div class='impl-items'><h4 id='method.stream' class='method'><code>fn <a href='#method.stream' class='fnname'>stream</a>(self) -&gt; <a class='struct' href='https://doc.rust-lang.org/nightly/std/sync/mpsc/struct.Receiver.html' title='std::sync::mpsc::Receiver'>Receiver</a>&lt;<a class='struct' href='../abc/struct.Candidate.html' title='abc::Candidate'>Candidate</a>&lt;Ctx::Solution&gt;&gt;</code></h4>
+<div class='docblock'><p>Runs indefinitely in the background, providing a stream of results.</p>
+
+<p>This method consumes the hive, which will run until the <code>HiveBuilder</code>
+object is dropped. It returns an <code>mpsc::Receiver</code>, which receives a
+<code>Candidate</code> each time the hive improves on its best solution.</p>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><code>impl&lt;Ctx: <a class='trait' href='../abc/trait.Context.html' title='abc::Context'>Context</a>&gt; <a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> for <a class='struct' href='../abc/struct.Hive.html' title='abc::Hive'>Hive</a>&lt;Ctx&gt; <span class='where'>where Ctx::Solution: <a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a></span></code></h3><div class='impl-items'><h4 id='method.fmt' class='method'><code>fn <a href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html#tymethod.fmt' class='fnname'>fmt</a>(&amp;self, f: &amp;mut <a class='struct' href='https://doc.rust-lang.org/nightly/core/fmt/struct.Formatter.html' title='core::fmt::Formatter'>Formatter</a>) -&gt; <a class='type' href='https://doc.rust-lang.org/nightly/core/fmt/type.Result.html' title='core::fmt::Result'>FmtResult</a></code></h4>
+</div><h3 class='impl'><code>impl&lt;Ctx: <a class='trait' href='../abc/trait.Context.html' title='abc::Context'>Context</a>&gt; <a class='trait' href='https://doc.rust-lang.org/nightly/core/ops/trait.Drop.html' title='core::ops::Drop'>Drop</a> for <a class='struct' href='../abc/struct.Hive.html' title='abc::Hive'>Hive</a>&lt;Ctx&gt;</code></h3><div class='impl-items'><h4 id='method.drop' class='method'><code>fn <a href='https://doc.rust-lang.org/nightly/core/ops/trait.Drop.html#tymethod.drop' class='fnname'>drop</a>(&amp;mut self)</code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "abc";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script defer src="../search-index.js"></script>
+</body>
+</html>

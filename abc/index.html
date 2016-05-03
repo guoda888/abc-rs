@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `abc` crate.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, abc">
+
+    <title>abc - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'></p><script>window.sidebarCurrent = {name: 'abc', ty: 'mod', relpath: '../'};</script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content mod">
+<h1 class='fqn'><span class='in-band'>Crate <a class='mod' href=''>abc</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a id='src-0' class='srclink' href='../src/abc/src/lib.rs.html#1-135' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>Runs Karaboga&#39;s Artificial Bee Colony algorithm in parallel.</p>
+
+<p>To take advantage of this crate, the user must implement the
+<a href="trait.Solution.html"><code>Solution</code></a> trait for a type of their creation.
+A <a href="struct.Hive.html"><code>Hive</code></a> of the appropriate type can then be built,
+which will search the solution space for the fittest candidate.</p>
+
+<h1 id='examples' class='section-header'><a href='#examples'>Examples</a></h1>
+<pre class='rust rust-example-rendered'>
+<span class='comment'>// ABC algorithm with canonical (proportionate) fitness scaling</span>
+<span class='comment'>// to minimize the 10-dimensional Rastrigin function.</span>
+
+<span class='kw'>extern</span> <span class='kw'>crate</span> <span class='ident'>abc</span>;
+<span class='kw'>extern</span> <span class='kw'>crate</span> <span class='ident'>rand</span>;
+
+<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>f32</span>::<span class='ident'>consts</span>::<span class='ident'>PI</span>;
+<span class='kw'>use</span> <span class='ident'>rand</span>::{<span class='ident'>random</span>, <span class='ident'>Closed01</span>, <span class='ident'>thread_rng</span>, <span class='ident'>Rng</span>};
+<span class='kw'>use</span> <span class='ident'>abc</span>::{<span class='ident'>Context</span>, <span class='ident'>Candidate</span>, <span class='ident'>HiveBuilder</span>};
+
+<span class='kw'>const</span> <span class='ident'>SIZE</span>: <span class='ident'>usize</span> <span class='op'>=</span> <span class='number'>10</span>;
+
+<span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Clone</span>, <span class='ident'>Debug</span>)]</span>
+<span class='kw'>struct</span> <span class='ident'>S</span>([<span class='ident'>f32</span>;<span class='ident'>SIZE</span>]);
+
+<span class='comment'>// Not really necessary; we&#39;re using this mostly to demonstrate usage.</span>
+<span class='kw'>struct</span> <span class='ident'>SBuilder</span> {
+    <span class='ident'>min</span>: <span class='ident'>f32</span>,
+    <span class='ident'>max</span>: <span class='ident'>f32</span>,
+    <span class='ident'>a</span>: <span class='ident'>f32</span>,
+    <span class='ident'>p_min</span>: <span class='ident'>f32</span>,
+    <span class='ident'>p_max</span>: <span class='ident'>f32</span>,
+}
+
+<span class='kw'>impl</span> <span class='ident'>Context</span> <span class='kw'>for</span> <span class='ident'>SBuilder</span> {
+    <span class='kw'>type</span> <span class='ident'>Solution</span> <span class='op'>=</span> [<span class='ident'>f32</span>;<span class='ident'>SIZE</span>];
+
+    <span class='kw'>fn</span> <span class='ident'>make</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> [<span class='ident'>f32</span>;<span class='ident'>SIZE</span>] {
+        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>new</span> <span class='op'>=</span> [<span class='number'>0.0</span>;<span class='ident'>SIZE</span>];
+        <span class='kw'>for</span> <span class='ident'>i</span> <span class='kw'>in</span> <span class='number'>0</span>..<span class='ident'>SIZE</span> {
+            <span class='kw'>let</span> <span class='ident'>Closed01</span>(<span class='ident'>x</span>) <span class='op'>=</span> <span class='ident'>random</span>::<span class='op'>&lt;</span><span class='ident'>Closed01</span><span class='op'>&lt;</span><span class='ident'>f32</span><span class='op'>&gt;&gt;</span>();
+            <span class='ident'>new</span>[<span class='ident'>i</span>] <span class='op'>=</span> (<span class='ident'>x</span> <span class='op'>*</span> (<span class='self'>self</span>.<span class='ident'>max</span> <span class='op'>-</span> <span class='self'>self</span>.<span class='ident'>min</span>)) <span class='op'>+</span> <span class='self'>self</span>.<span class='ident'>min</span>;
+        }
+        <span class='ident'>new</span>
+    }
+
+    <span class='kw'>fn</span> <span class='ident'>evaluate_fitness</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>solution</span>: <span class='kw-2'>&amp;</span>[<span class='ident'>f32</span>;<span class='number'>10</span>]) <span class='op'>-&gt;</span> <span class='ident'>f64</span> {
+        <span class='kw'>let</span> <span class='ident'>sum</span> <span class='op'>=</span> <span class='ident'>solution</span>.<span class='ident'>iter</span>()
+                          .<span class='ident'>map</span>(<span class='op'>|</span><span class='ident'>x</span><span class='op'>|</span> <span class='ident'>x</span>.<span class='ident'>powf</span>(<span class='number'>2.0</span>) <span class='op'>-</span> <span class='self'>self</span>.<span class='ident'>a</span> <span class='op'>*</span> (<span class='op'>*</span><span class='ident'>x</span> <span class='op'>*</span> <span class='number'>2.0</span> <span class='op'>*</span> <span class='ident'>PI</span>).<span class='ident'>cos</span>())
+                          .<span class='ident'>fold</span>(<span class='number'>0.0</span>, <span class='op'>|</span><span class='ident'>total</span>, <span class='ident'>next</span><span class='op'>|</span> <span class='ident'>total</span> <span class='op'>+</span> <span class='ident'>next</span>);
+        <span class='kw'>let</span> <span class='ident'>rastrigin</span> <span class='op'>=</span> ((<span class='self'>self</span>.<span class='ident'>a</span> <span class='op'>*</span> <span class='ident'>SIZE</span> <span class='kw'>as</span> <span class='ident'>f32</span>) <span class='op'>+</span> <span class='ident'>sum</span>) <span class='kw'>as</span> <span class='ident'>f64</span>;
+
+        <span class='comment'>// Minimize.</span>
+        <span class='kw'>if</span> <span class='ident'>rastrigin</span> <span class='op'>&gt;=</span> <span class='number'>0.0</span> {
+            <span class='number'>1.0</span> <span class='op'>/</span> (<span class='number'>1.0</span> <span class='op'>+</span> <span class='ident'>rastrigin</span>)
+        } <span class='kw'>else</span> {
+            <span class='number'>1.0</span> <span class='op'>+</span> <span class='ident'>rastrigin</span>.<span class='ident'>abs</span>()
+        }
+    }
+
+    <span class='kw'>fn</span> <span class='ident'>explore</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>field</span>: <span class='kw-2'>&amp;</span>[<span class='ident'>Candidate</span><span class='op'>&lt;</span>[<span class='ident'>f32</span>;<span class='ident'>SIZE</span>]<span class='op'>&gt;</span>], <span class='ident'>index</span>: <span class='ident'>usize</span>) <span class='op'>-&gt;</span> [<span class='ident'>f32</span>;<span class='ident'>SIZE</span>] {
+        <span class='comment'>// new[i] = current[i] + Φ * (current[i] - other[i]), where:</span>
+        <span class='comment'>//      phi_min &lt;= Φ &lt;= phi_max</span>
+        <span class='comment'>//      other is a solution, other than current, chosen at random</span>
+
+        <span class='kw'>let</span> <span class='kw-2'>ref</span> <span class='ident'>current</span> <span class='op'>=</span> <span class='ident'>field</span>[<span class='ident'>index</span>].<span class='ident'>solution</span>;
+        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>new</span> <span class='op'>=</span> [<span class='number'>0_f32</span>;<span class='ident'>SIZE</span>];
+
+        <span class='kw'>for</span> <span class='ident'>i</span> <span class='kw'>in</span> <span class='number'>0</span>..<span class='ident'>SIZE</span> {
+            <span class='comment'>// Choose a different vector at random.</span>
+            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>rng</span> <span class='op'>=</span> <span class='ident'>thread_rng</span>();
+            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>index2</span> <span class='op'>=</span> <span class='ident'>rng</span>.<span class='ident'>gen_range</span>(<span class='number'>0</span>, <span class='ident'>current</span>.<span class='ident'>len</span>() <span class='op'>-</span> <span class='number'>1</span>);
+            <span class='kw'>if</span> <span class='ident'>index2</span> <span class='op'>&gt;=</span> <span class='ident'>index</span> { <span class='ident'>index2</span> <span class='op'>+=</span> <span class='number'>1</span>; }
+            <span class='kw'>let</span> <span class='kw-2'>ref</span> <span class='ident'>other</span> <span class='op'>=</span> <span class='ident'>field</span>[<span class='ident'>index2</span>].<span class='ident'>solution</span>;
+
+            <span class='kw'>let</span> <span class='ident'>phi</span> <span class='op'>=</span> <span class='ident'>random</span>::<span class='op'>&lt;</span><span class='ident'>Closed01</span><span class='op'>&lt;</span><span class='ident'>f32</span><span class='op'>&gt;&gt;</span>().<span class='number'>0</span> <span class='op'>*</span> (<span class='self'>self</span>.<span class='ident'>p_max</span> <span class='op'>-</span> <span class='self'>self</span>.<span class='ident'>p_min</span>) <span class='op'>+</span> <span class='self'>self</span>.<span class='ident'>p_min</span>;
+            <span class='ident'>new</span>[<span class='ident'>i</span>] <span class='op'>=</span> <span class='ident'>current</span>[<span class='ident'>i</span>] <span class='op'>+</span> (<span class='ident'>phi</span> <span class='op'>*</span> (<span class='ident'>current</span>[<span class='ident'>i</span>] <span class='op'>-</span> <span class='ident'>other</span>[<span class='ident'>i</span>]));
+        }
+
+        <span class='ident'>new</span>
+    }
+}
+
+<span class='kw'>fn</span> <span class='ident'>main</span>() {
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>builder</span> <span class='op'>=</span> <span class='ident'>SBuilder</span> {
+        <span class='ident'>min</span>: <span class='op'>-</span><span class='number'>5.12</span>,
+        <span class='ident'>max</span>: <span class='number'>5.12</span>,
+        <span class='ident'>a</span>: <span class='number'>10.0</span>,
+        <span class='ident'>p_min</span>: <span class='op'>-</span><span class='number'>1.0</span>,
+        <span class='ident'>p_max</span>: <span class='number'>1.0</span>
+    };
+    <span class='kw'>let</span> <span class='ident'>hive_builder</span> <span class='op'>=</span> <span class='ident'>HiveBuilder</span>::<span class='ident'>new</span>(<span class='ident'>builder</span>, <span class='number'>10</span>);
+    <span class='kw'>let</span> <span class='ident'>hive</span> <span class='op'>=</span> <span class='ident'>hive_builder</span>.<span class='ident'>build</span>().<span class='ident'>unwrap</span>();
+
+    <span class='comment'>// Once built, the hive can be run for a number of rounds.</span>
+    <span class='kw'>let</span> <span class='ident'>best_after_10</span> <span class='op'>=</span> <span class='ident'>hive</span>.<span class='ident'>run_for_rounds</span>(<span class='number'>10</span>).<span class='ident'>unwrap</span>();
+
+    <span class='comment'>// As long as it&#39;s run some rounds at a time, you can keep running it.</span>
+    <span class='kw'>let</span> <span class='ident'>best_after_20</span> <span class='op'>=</span> <span class='ident'>hive</span>.<span class='ident'>run_for_rounds</span>(<span class='number'>10</span>).<span class='ident'>unwrap</span>();
+
+    <span class='comment'>// The algorithm doesn&#39;t guarantee improvement in any number of rounds,</span>
+    <span class='comment'>// but it always keeps its all-time best.</span>
+    <span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>best_after_20</span>.<span class='ident'>fitness</span> <span class='op'>&gt;=</span> <span class='ident'>best_after_10</span>.<span class='ident'>fitness</span>);
+
+    <span class='comment'>// The hive can be consumed to create a Receiver object. This can be</span>
+    <span class='comment'>// iterated over indefinitely, and will receive successive improvements</span>
+    <span class='comment'>// on the best candidate so far.</span>
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>current_best_fitness</span> <span class='op'>=</span> <span class='ident'>best_after_20</span>.<span class='ident'>fitness</span>;
+    <span class='kw'>for</span> <span class='ident'>new_best</span> <span class='kw'>in</span> <span class='ident'>hive</span>.<span class='ident'>stream</span>().<span class='ident'>iter</span>().<span class='ident'>take</span>(<span class='number'>3</span>) {
+        <span class='comment'>// The iterator will start with the best result so far; after that,</span>
+        <span class='comment'>// each new candidate will be an improvement.</span>
+        <span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>new_best</span>.<span class='ident'>fitness</span> <span class='op'>&gt;=</span> <span class='ident'>current_best_fitness</span>);
+        <span class='ident'>current_best_fitness</span> <span class='op'>=</span> <span class='ident'>new_best</span>.<span class='ident'>fitness</span>;
+    }
+}</pre>
+</div><h2 id='modules' class='section-header'><a href="#modules">Modules</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class='mod' href='scaling/index.html'
+                                  title='abc::scaling'>scaling</a></td>
+                           <td class='docblock short'>
+                                <p>Manipulates the probabilities of working on different solutions.</p>
+                           </td>
+                       </tr></table><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class='struct' href='struct.Candidate.html'
+                                  title='abc::Candidate'>Candidate</a></td>
+                           <td class='docblock short'>
+                                <p>One solution being explored by the hive, plus additional data.</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class='struct' href='struct.Error.html'
+                                  title='abc::Error'>Error</a></td>
+                           <td class='docblock short'>
+                                <p>Unifies the errors thrown by a hive&#39;s operation.</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class='struct' href='struct.Hive.html'
+                                  title='abc::Hive'>Hive</a></td>
+                           <td class='docblock short'>
+                                <p>Runs the ABC algorithm, maintaining any necessary state.</p>
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class='struct' href='struct.HiveBuilder.html'
+                                  title='abc::HiveBuilder'>HiveBuilder</a></td>
+                           <td class='docblock short'>
+                                <p>Manages the parameters of the ABC algorithm.</p>
+                           </td>
+                       </tr></table><h2 id='traits' class='section-header'><a href="#traits">Traits</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class='trait' href='trait.Context.html'
+                                  title='abc::Context'>Context</a></td>
+                           <td class='docblock short'>
+                                <p>Context for generating and evaluating solutions.</p>
+                           </td>
+                       </tr></table><h2 id='types' class='section-header'><a href="#types">Type Definitions</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class='type' href='type.Result.html'
+                                  title='abc::Result'>Result</a></td>
+                           <td class='docblock short'>
+                                <p>Encodes the possibility of a thread panicking and corruping a mutex.</p>
+                           </td>
+                       </tr></table></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "abc";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script defer src="../search-index.js"></script>
+</body>
+</html>

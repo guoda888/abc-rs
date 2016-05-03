@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `HiveBuilder` struct in crate `abc`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, HiveBuilder">
+
+    <title>abc::HiveBuilder - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='index.html'>abc</a></p><script>window.sidebarCurrent = {name: 'HiveBuilder', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='index.html'>abc</a>::<wbr><a class='struct' href=''>HiveBuilder</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a id='src-174' class='srclink' href='../src/abc/src/hive.rs.html#22-29' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct HiveBuilder&lt;Ctx: <a class='trait' href='../abc/trait.Context.html' title='abc::Context'>Context</a>&gt; {
+    // some fields omitted
+}</pre><div class='docblock'><p>Manages the parameters of the ABC algorithm.</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl&lt;Ctx: <a class='trait' href='../abc/trait.Context.html' title='abc::Context'>Context</a>&gt; <a class='struct' href='../abc/struct.HiveBuilder.html' title='abc::HiveBuilder'>HiveBuilder</a>&lt;Ctx&gt;</code></h3><div class='impl-items'><h4 id='method.new' class='method'><code>fn <a href='#method.new' class='fnname'>new</a>(context: Ctx, workers: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a class='struct' href='../abc/struct.HiveBuilder.html' title='abc::HiveBuilder'>HiveBuilder</a>&lt;Ctx&gt;</code></h4>
+<div class='docblock'><p>Creates a new hive.</p>
+
+<ul>
+<li><code>context</code> - Factory-like state that can be used while generating solutions.</li>
+<li><code>workers</code> - Number of working solution candidates to maintain at a time.</li>
+</ul>
+</div><h4 id='method.set_observers' class='method'><code>fn <a href='#method.set_observers' class='fnname'>set_observers</a>(self, observers: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a class='struct' href='../abc/struct.HiveBuilder.html' title='abc::HiveBuilder'>HiveBuilder</a>&lt;Ctx&gt;</code></h4>
+<div class='docblock'><p>Sets the number of &quot;bees&quot; that will pick a candidate to work on at random.</p>
+
+<p>This defaults to the number of workers.</p>
+</div><h4 id='method.set_retries' class='method'><code>fn <a href='#method.set_retries' class='fnname'>set_retries</a>(self, retries: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a class='struct' href='../abc/struct.HiveBuilder.html' title='abc::HiveBuilder'>HiveBuilder</a>&lt;Ctx&gt;</code></h4>
+<div class='docblock'><p>Sets the number of times a candidate can go unimproved before being reinitialized.</p>
+
+<p>This defaults to the number of workers.</p>
+</div><h4 id='method.set_threads' class='method'><code>fn <a href='#method.set_threads' class='fnname'>set_threads</a>(self, threads: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a class='struct' href='../abc/struct.HiveBuilder.html' title='abc::HiveBuilder'>HiveBuilder</a>&lt;Ctx&gt;</code></h4>
+<div class='docblock'><p>Sets the number of worker threads to use while running.</p>
+</div><h4 id='method.set_scaling' class='method'><code>fn <a href='#method.set_scaling' class='fnname'>set_scaling</a>(self, scale: <a class='struct' href='https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;<a class='type' href='../abc/scaling/type.ScalingFunction.html' title='abc::scaling::ScalingFunction'>ScalingFunction</a>&gt;) -&gt; <a class='struct' href='../abc/struct.HiveBuilder.html' title='abc::HiveBuilder'>HiveBuilder</a>&lt;Ctx&gt;</code></h4>
+<div class='docblock'><p>Sets the scaling function for observers to use.</p>
+</div><h4 id='method.build' class='method'><code>fn <a href='#method.build' class='fnname'>build</a>(self) -&gt; <a class='type' href='../abc/type.Result.html' title='abc::Result'>AbcResult</a>&lt;<a class='struct' href='../abc/struct.Hive.html' title='abc::Hive'>Hive</a>&lt;Ctx&gt;&gt;</code></h4>
+<div class='docblock'><p>Activates the <code>HiveBuilder</code> to create a runnable object.</p>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "abc";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script defer src="../search-index.js"></script>
+</body>
+</html>

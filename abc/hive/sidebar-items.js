@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Hive","Runs the ABC algorithm, maintaining any necessary state."],["HiveBuilder","Manages the parameters of the ABC algorithm."]]});
